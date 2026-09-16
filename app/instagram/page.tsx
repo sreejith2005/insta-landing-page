@@ -42,7 +42,8 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
       await repository(),
       experienceDefaults(env),
     );
-  } catch {
+  } catch (error) {
+    console.error("Product context resolution failed:", error);
     return <ContextState status="invalid" supportUrl={supportUrl} />;
   }
 
