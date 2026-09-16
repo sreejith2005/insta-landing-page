@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+const httpsUrl = z
+  .string()
+  .trim()
+  .regex(/^https:\/\/[^\s]+$/)
+  .optional()
+  .transform((value) => (value ? value : undefined));
+
 const rawSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATA_PROVIDER: z.enum(["preview", "google-sheets"]).default("preview"),
@@ -13,10 +20,18 @@ const rawSchema = z.object({
   GOOGLE_INQUIRY_SHEET: z.string().trim().default("Inquiries"),
   GOOGLE_EVENT_SHEET: z.string().trim().default("Events"),
   GOOGLE_CALLBACK_SHEET: z.string().trim().default("Callback_Requests"),
-  CALENDLY_STORE_VISIT_URL: z.string().trim().optional(),
-  CALENDLY_VIDEO_URL: z.string().trim().optional(),
-  WHATSAPP_NUMBER: z.string().trim().optional(),
-  ASSISTED_SUPPORT_URL: z.string().trim().optional(),
+  CALENDLY_STORE_VISIT_URL: httpsUrl,
+  CALENDLY_VIDEO_URL: httpsUrl,
+  /** Disabled by default; enable only once Calendly booking events are verified. */
+  CALENDLY_CAPTURE_BOOKINGS: z.enum(["true", "false"]).default("false"),
+  WHATSAPP_NUMBER: z
+    .string()
+    .trim()
+    .regex(/^[1-9][0-9]{7,14}$/)
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+  WHATSAPP_MESSAGE_TEMPLATE: z.string().trim().max(400).optional(),
+  ASSISTED_SUPPORT_URL: httpsUrl,
 });
 
 export type ServerEnv = ReturnType<typeof parseServerEnv>;
@@ -57,8 +72,12 @@ export function parseServerEnv(input: Record<string, string | undefined>) {
     calendly: {
       storeVisitUrl: raw.CALENDLY_STORE_VISIT_URL,
       videoConsultationUrl: raw.CALENDLY_VIDEO_URL,
+      captureBookings: raw.CALENDLY_CAPTURE_BOOKINGS === "true",
     },
-    whatsappNumber: raw.WHATSAPP_NUMBER,
+    whatsapp: {
+      number: raw.WHATSAPP_NUMBER,
+      messageTemplate: raw.WHATSAPP_MESSAGE_TEMPLATE,
+    },
     assistedSupportUrl: raw.ASSISTED_SUPPORT_URL,
   } as const;
 }
@@ -67,11 +86,29 @@ export function serverEnv() {
   return parseServerEnv(process.env);
 }
 
+/**
+ * Experience defaults applied when a Product Master row leaves a field blank.
+ * Product/campaign values always win over these global fallbacks.
+ */
+export function experienceDefaults(env: ServerEnv = serverEnv()) {
+  return {
+    calendly: {
+      storeVisitUrl: env.calendly.storeVisitUrl,
+      videoConsultationUrl: env.calendly.videoConsultationUrl,
+    },
+    whatsapp: {
+      number: env.whatsapp.number,
+      messageTemplate: env.whatsapp.messageTemplate,
+    },
+  };
+}
+
 export function publicEnv() {
   const env = serverEnv();
   return {
     appUrl: env.appUrl,
     landingPageVersion: env.landingPageVersion,
     isPreview: env.dataProvider === "preview",
+    captureBookings: env.calendly.captureBookings,
   };
 }

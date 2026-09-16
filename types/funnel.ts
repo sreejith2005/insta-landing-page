@@ -1,15 +1,45 @@
-export type IncomingInstagramContext = {
+/**
+ * The approved Reel/campaign/product triple. This identifies a product mapping
+ * and is deliberately separate from the customer-supplied context below, so a
+ * Product Master record never carries session or attribution data.
+ */
+export type ProductMapping = {
   productId: string;
   reelId: string;
   campaignId: string;
-  contextToken?: string;
 };
 
+/** Where the customer entered the funnel. Restricted to an approved allowlist. */
+export type FunnelSource = "instagram" | "manychat" | "whatsapp" | "direct";
+
+/** Optional marketing attribution forwarded by ManyChat; never customer-entered. */
+export type UtmAttribution = {
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+};
+
+export type IncomingInstagramContext = ProductMapping &
+  UtmAttribution & {
+    source: FunnelSource;
+    contextToken?: string;
+  };
+
 export type Specification = { label: string; value: string };
+
+export type AppointmentType = "store_visit" | "video_consultation";
+
+export type CtaName = AppointmentType | "whatsapp" | "callback";
 
 export type PublicProductContext = {
   productId: string;
   productName: string;
+  category?: string;
+  collection?: string;
+  /** Position of this product within a multi-product Reel, when applicable. */
+  productPosition?: number;
   productImage: {
     src: string;
     alt: string;
@@ -26,10 +56,14 @@ export type PublicProductContext = {
     storeVisitUrl?: string;
     videoConsultationUrl?: string;
   };
+  whatsapp: {
+    number?: string;
+    messageTemplate?: string;
+  };
   ctas: {
     whatsappEnabled: boolean;
     callbackEnabled: boolean;
-    order: Array<"store_visit" | "video_consultation" | "whatsapp" | "callback">;
+    order: CtaName[];
   };
 };
 

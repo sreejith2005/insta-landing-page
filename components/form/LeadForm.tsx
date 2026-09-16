@@ -1,27 +1,49 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { experienceCopy, leadFields } from "@/config/experience";
+import { experienceCopy, honeypotField, leadFields } from "@/config/experience";
 import { getSessionId } from "@/lib/attribution/session";
 import { trackFunnelEvent } from "@/lib/attribution/client-events";
-import { leadSubmissionSchema } from "@/lib/validation/schemas";
+import { validateLeadFields } from "@/lib/validation/lead-fields";
 import type { AcceptedInquiry, IncomingInstagramContext, LeadFields } from "@/types/funnel";
 import { LeadField } from "./LeadField";
 
 type Props = {
   context: IncomingInstagramContext;
+  landingPageVersion?: string;
   onAccepted: (accepted: AcceptedInquiry, sessionId: string) => void;
 };
 
 const initialFields: LeadFields = { fullName: "", mobileNumber: "", pinCode: "", city: "" };
 
-export function LeadForm({ context, onAccepted }: Props) {
+const GENERIC_FAILURE = "We could not save your details. Please try again.";
+
+export function LeadForm({ context, landingPageVersion = "phase1", onAccepted }: Props) {
   const [fields, setFields] = useState(initialFields);
   const [errors, setErrors] = useState<Partial<Record<keyof LeadFields, string>>>({});
   const [status, setStatus] = useState<"idle" | "submitting">("idle");
   const [formError, setFormError] = useState("");
+
+  /** Applies the authoritative per-field errors returned by the server. */
+  function setFieldErrorsFromServer(serverFields: unknown) {
+    if (!serverFields || typeof serverFields !== "object") return;
+    const next: Partial<Record<keyof LeadFields, string>> = {};
+    for (const [key, messages] of Object.entries(serverFields as Record<string, unknown>)) {
+      if (key in initialFields && Array.isArray(messages) && typeof messages[0] === "string") {
+        next[key as keyof LeadFields] = messages[0];
+      }
+    }
+    if (Object.keys(next).length) setErrors(next);
+  }
   const started = useRef(false);
+  const honeypot = useRef<HTMLInputElement>(null);
+  // Recorded in an effect: reading the clock during render is impure.
+  const mountedAt = useRef(0);
+
+  useEffect(() => {
+    mountedAt.current = Date.now();
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,20 +53,26 @@ export function LeadForm({ context, onAccepted }: Props) {
       ...fields,
       ...context,
       sessionId,
-      idempotencyKey: `lead:${sessionId}:${context.productId}`,
-      landingPageVersion: "phase1",
+      // Scoped to the session and the full product/Reel/campaign triple, so a
+      // repeat tap cannot duplicate an inquiry while the same piece arriving
+      // from a different Reel or campaign still records its own attribution.
+      idempotencyKey: `lead:${sessionId}:${context.productId}:${context.reelId}:${context.campaignId}`,
+      landingPageVersion,
+      company: honeypot.current?.value ?? "",
+      elapsedMs: mountedAt.current ? Date.now() - mountedAt.current : undefined,
     };
-    const parsed = leadSubmissionSchema.safeParse(payload);
-    if (!parsed.success) {
-      const nextErrors: Partial<Record<keyof LeadFields, string>> = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0] as keyof LeadFields;
-        if (key in fields && !nextErrors[key]) {
-          nextErrors[key] = key === "fullName" ? "Enter your full name." : issue.message;
-        }
-      }
+    // UX-only pass over the four customer-entered fields. The server revalidates
+    // the whole payload and stays authoritative.
+    const nextErrors = validateLeadFields(fields);
+    if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
-      if (sessionId) void trackFunnelEvent("form_validation_failed", { sessionId, ...context, landingPageVersion: "phase1" });
+      if (sessionId) {
+        void trackFunnelEvent("form_validation_failed", {
+          sessionId,
+          ...context,
+          landingPageVersion,
+        });
+      }
       return;
     }
 
@@ -54,13 +82,24 @@ export function LeadForm({ context, onAccepted }: Props) {
       const response = await fetch("/api/lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify(payload),
       });
       const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.message);
+      if (!response.ok || !result.ok) {
+        // Every server message is deliberately generic and customer-safe, so
+        // showing it beats a blanket failure — a rate-limited customer is told
+        // to wait rather than to retry immediately.
+        setFieldErrorsFromServer(result.fields);
+        setFormError(
+          typeof result.message === "string" && result.message
+            ? result.message
+            : GENERIC_FAILURE,
+        );
+        return;
+      }
       onAccepted(result as AcceptedInquiry & { ok: true }, sessionId);
     } catch {
-      setFormError("We could not save your details. Please try again.");
+      setFormError(GENERIC_FAILURE);
     } finally {
       setStatus("idle");
     }
@@ -83,14 +122,30 @@ export function LeadForm({ context, onAccepted }: Props) {
             onChange={(event) => {
               if (!started.current) {
                 started.current = true;
-                const sessionId = getSessionId();
-                void trackFunnelEvent("form_started", { sessionId, ...context, landingPageVersion: "phase1" });
+                void trackFunnelEvent("form_started", {
+                  sessionId: getSessionId(),
+                  ...context,
+                  landingPageVersion,
+                });
               }
               setFields((current) => ({ ...current, [field.name]: event.target.value }));
               setErrors((current) => ({ ...current, [field.name]: undefined }));
             }}
           />
         ))}
+      </div>
+      {/* Honeypot: removed from the tab order and the accessibility tree. */}
+      <div className="honeypot" aria-hidden="true">
+        <label htmlFor={honeypotField}>Company</label>
+        <input
+          ref={honeypot}
+          id={honeypotField}
+          name={honeypotField}
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          defaultValue=""
+        />
       </div>
       {formError ? <p className="form-error" role="alert">{formError}</p> : null}
       <button className="primary-button" disabled={status === "submitting"} type="submit">

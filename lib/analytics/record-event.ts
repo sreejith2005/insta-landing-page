@@ -1,7 +1,17 @@
 import type { FunnelRepository } from "@/lib/leads/contracts";
 import type { EventInput } from "@/lib/validation/schemas";
 
-const allowedMetadata = new Set(["appointmentType", "reason", "embedStatus"]);
+/**
+ * Only these metadata keys may reach analytics storage. Anything else — above
+ * all lead PII — is dropped before the write.
+ */
+const allowedMetadata = new Set([
+  "appointmentType",
+  "reason",
+  "embedStatus",
+  "productPosition",
+  "hasImage",
+]);
 
 export async function recordEvent(input: EventInput, repository: FunnelRepository) {
   const metadata = Object.fromEntries(

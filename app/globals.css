@@ -34,7 +34,7 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
 .pre-submit { width: min(100%, 520px); margin: 0 auto; padding: 18px 0 24px; }
 .progress { margin: 0 0 28px; }
 .progress ol { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 0; padding: 0; list-style: none; }
-.progress li { position: relative; display: grid; justify-items: center; gap: 7px; color: #96918c; font-size: clamp(10px, 2.8vw, 12px); text-align: center; }
+.progress li { position: relative; display: grid; justify-items: center; gap: 7px; color: var(--muted); font-size: clamp(10px, 2.8vw, 12px); text-align: center; }
 .progress li:not(:last-child)::after { content: ""; position: absolute; top: 4px; left: 56%; width: 88%; height: 1px; background: var(--border); }
 .progress-dot { width: 9px; height: 9px; border-radius: 50%; background: #ddd9d5; z-index: 1; }
 .progress li[aria-current="step"] { color: var(--charcoal); font-weight: 700; }
@@ -43,6 +43,7 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
 h1, h2, .product-name { font-family: var(--display); font-weight: 400; }
 .pre-submit h1, .reveal h1, .context-state h1 { margin: 0; font-size: clamp(2rem, 10vw, 3rem); line-height: 1.08; letter-spacing: -.025em; }
 .introduction { max-width: 420px; margin: 14px 0 20px; color: #393939; font-size: 15px; line-height: 1.55; }
+.offer-deadline { display: block; margin-top: 6px; color: var(--burgundy); font-weight: 700; }
 .offer-preview, .offer-copy { margin: 0 0 24px; padding: 14px 16px; background: var(--surface); border-left: 2px solid var(--gold); color: #59534c; font-size: 13px; line-height: 1.45; }
 .fields { display: grid; grid-template-columns: 1fr; gap: 0; }
 .field { min-width: 0; }
@@ -61,7 +62,7 @@ h1, h2, .product-name { font-family: var(--display); font-weight: 400; }
 .reveal { padding: 18px 0 32px; }
 .reveal-grid { display: grid; grid-template-columns: 1fr; gap: 26px; }
 .reveal h1 { font-size: clamp(2rem, 9vw, 3.1rem); }
-.product-media { min-height: 250px; display: grid; place-items: center; overflow: hidden; border-radius: 10px; background: linear-gradient(145deg, #f1f1f1, #e4e4e4); color: #858585; font-size: 13px; text-align: center; }
+.product-media { min-height: 250px; display: grid; place-items: center; overflow: hidden; border-radius: 10px; background: linear-gradient(145deg, #f1f1f1, #e4e4e4); color: #5a5a5a; font-size: 13px; text-align: center; }
 .product-media img { width: 100%; height: 100%; object-fit: contain; }
 .mobile-media { margin-top: 16px; }
 .desktop-media { display: none; }
@@ -72,15 +73,30 @@ h1, h2, .product-name { font-family: var(--display); font-weight: 400; }
 .specifications dt { color: var(--muted); }
 .specifications dd { position: relative; margin: 0; padding-left: 18px; }
 .specifications dd::before { content: "—"; position: absolute; left: 0; color: var(--gold); }
+.repeat-welcome { margin: 14px 0 0; padding: 12px 14px; background: var(--surface); border-left: 2px solid var(--success); color: #3d5f4c; font-size: 13px; line-height: 1.45; }
+.honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
 .appointments { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--gold); }
 .appointments h2 { margin: 0 0 16px; font-size: 24px; line-height: 1.2; }
 .appointment-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.appointment-options button { min-height: 48px; padding: 10px 8px; border: 1px solid var(--burgundy); border-radius: 7px; background: #fff; color: var(--burgundy); cursor: pointer; font-size: 13px; font-weight: 700; }
+.appointment-options button { min-height: 48px; display: grid; align-content: center; gap: 4px; padding: 10px 10px; border: 1px solid var(--burgundy); border-radius: 7px; background: #fff; color: var(--burgundy); cursor: pointer; text-align: left; }
+.appointment-options .option-label { font-size: 13px; font-weight: 700; }
+.appointment-options .option-description { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .appointment-options button.selected { background: var(--burgundy); color: #fff; }
+.appointment-options button.selected .option-description { color: rgba(255,255,255,.82); }
+
 .calendly-region { min-height: 88px; margin-top: 18px; display: grid; place-items: center; border: 1px dashed #c8c3bd; border-radius: 8px; color: var(--muted); font-size: 12px; text-align: center; }
-.calendly-region p { max-width: 440px; margin: 0; padding: 20px; line-height: 1.5; }
-.calendly-region iframe { width: 100%; min-height: min(660px, 78svh); border: 0; }
-.calendly-region a { min-height: 44px; display: inline-flex; align-items: center; color: var(--burgundy); }
+.calendly-region > p { max-width: 440px; margin: 0; padding: 20px; line-height: 1.5; }
+.booking-confirmed { color: var(--success); font-weight: 700; }
+.calendly-embed { width: 100%; display: grid; justify-items: center; gap: 6px; padding: 8px; }
+/* Reserve embed height so the booking UI never collapses or clips on mobile. */
+.calendly-inline { width: 100%; min-height: min(640px, 76svh); }
+.calendly-inline[data-state="loading"] { min-height: 0; }
+.calendly-embed iframe { width: 100%; border: 0; }
+.calendly-status { margin: 0; padding: 20px; }
+.calendly-fallback { display: grid; justify-items: center; gap: 4px; padding: 18px; }
+.calendly-fallback p { margin: 0; line-height: 1.5; }
+.fallback-link { min-height: 44px; display: inline-flex; align-items: center; padding: 0 8px; color: var(--burgundy); font-size: 13px; }
 .secondary-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 22px; margin-top: 16px; }
 .secondary-actions a, .secondary-actions button { min-height: 44px; display: inline-flex; align-items: center; border: 0; background: transparent; color: var(--burgundy); cursor: pointer; font-size: 13px; text-underline-offset: 4px; }
 .secondary-actions .disabled-action { min-height: 44px; display: inline-flex; align-items: center; color: var(--muted); font-size: 13px; opacity: .75; }
@@ -90,7 +106,8 @@ h1, h2, .product-name { font-family: var(--display); font-weight: 400; }
 .context-state { min-height: 70svh; display: grid; place-content: center; justify-items: center; padding: 40px 0; text-align: center; }
 .context-state .state-mark { margin: 0 0 16px; color: var(--gold); font-size: 36px; }
 .context-state h1 { max-width: 660px; }
-.context-state p:last-child { max-width: 520px; color: var(--muted); line-height: 1.6; }
+.context-state p { max-width: 520px; color: var(--muted); line-height: 1.6; }
+.support-link { min-height: 44px; display: inline-flex; align-items: center; margin-top: 18px; padding: 0 18px; border: 1px solid var(--burgundy); border-radius: 8px; color: var(--burgundy); font-size: 14px; text-decoration: none; }
 .loading-shell { width: min(100% - 40px, 520px); margin: 40px auto; }
 .skeleton { border-radius: 8px; background: linear-gradient(90deg, #f2f0ed, #faf9f7, #f2f0ed); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 .logo-skeleton { width: 160px; height: 42px; }.title-skeleton { width: 75%; height: 80px; margin-top: 60px; }.form-skeleton { height: 380px; margin-top: 32px; }
@@ -107,10 +124,21 @@ h1, h2, .product-name { font-family: var(--display); font-weight: 400; }
 
 @media (orientation: landscape) and (max-height: 540px) {
   .shell { padding-top: 12px; }
+  .desktop-media { min-height: min(520px, 76svh); }
   .brand-header { min-height: 46px; }
   .pre-submit, .reveal { padding-top: 12px; }
   .progress { margin-bottom: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+@media (max-width: 480px) {
+  .calendly-region:has(.calendly-embed) {
+    margin-left: calc(-1 * max(20px, env(safe-area-inset-left)));
+    margin-right: calc(-1 * max(20px, env(safe-area-inset-right)));
+    border-inline: 0;
+    border-radius: 0;
+  }
+  .calendly-region:has(.calendly-embed) .calendly-embed { padding: 0; }
 }

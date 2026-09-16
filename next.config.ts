@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'none'",
+      "object-src 'none'",
+      "upgrade-insecure-requests",
       "img-src 'self' data: https:",
       `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""} https://assets.calendly.com`,
       "style-src 'self' 'unsafe-inline' https://assets.calendly.com",

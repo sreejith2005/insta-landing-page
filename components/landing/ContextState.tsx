@@ -6,6 +6,31 @@ const copy = {
   inactive: ["This piece is currently unavailable", "Our team can help you explore a suitable alternative."],
 } as const;
 
-export function ContextState({ status }: { status: keyof typeof copy }) {
-  return <div className="shell"><BrandHeader /><main className="context-state"><p className="state-mark" aria-hidden="true">◇</p><h1>{copy[status][0]}</h1><p>{copy[status][1]}</p></main></div>;
+/**
+ * Recovery state for any context the Product Master cannot resolve. No product
+ * is ever invented here; when `ASSISTED_SUPPORT_URL` is configured the customer
+ * is routed to assisted support instead of being left at a dead end.
+ */
+export function ContextState({
+  status,
+  supportUrl,
+}: {
+  status: keyof typeof copy;
+  supportUrl?: string;
+}) {
+  return (
+    <div className="shell">
+      <BrandHeader />
+      <main className="context-state">
+        <p className="state-mark" aria-hidden="true">◇</p>
+        <h1>{copy[status][0]}</h1>
+        <p>{copy[status][1]}</p>
+        {supportUrl ? (
+          <a className="support-link" href={supportUrl} target="_blank" rel="noreferrer">
+            Speak to a jewellery expert
+          </a>
+        ) : null}
+      </main>
+    </div>
+  );
 }

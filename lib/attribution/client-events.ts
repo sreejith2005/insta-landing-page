@@ -1,12 +1,13 @@
-import type { FunnelEventName } from "@/types/funnel";
+import type { FunnelEventName, FunnelSource, UtmAttribution } from "@/types/funnel";
 
-export type TrackingContext = {
+export type TrackingContext = UtmAttribution & {
   sessionId: string;
   inquiryId?: string;
   customerId?: string;
   productId: string;
   reelId: string;
   campaignId: string;
+  source: FunnelSource;
   landingPageVersion: string;
 };
 

@@ -16,6 +16,7 @@ describe("requestCallback", () => {
         productId: "MKBR639",
         reelId: "R123",
         campaignId: "RAKHI26",
+        source: "instagram",
         sessionId: "d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4",
         idempotencyKey: "lead:d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4",
         landingPageVersion: "phase1",
