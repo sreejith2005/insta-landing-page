@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { SecondaryActions } from "@/components/conversion/SecondaryActions";
 import { Progress } from "@/components/landing/Progress";
@@ -12,11 +12,20 @@ import { trackFunnelEvent, type TrackingContext } from "@/lib/attribution/client
 
 export function ProductReveal({ product, inquiryId, customerId, sessionId, context }: { product: PublicProductContext; inquiryId: string; customerId?: string; sessionId: string; context?: IncomingInstagramContext }) {
   const heading = useRef<HTMLHeadingElement>(null);
-  const tracking: TrackingContext = { sessionId, inquiryId, customerId, productId: product.productId, reelId: context?.reelId ?? "unknown", campaignId: product.campaign.campaignId, landingPageVersion: "phase1" };
+  const hasTrackingContext = Boolean(context);
+  const tracking = useMemo<TrackingContext>(() => ({
+    sessionId,
+    inquiryId,
+    customerId,
+    productId: product.productId,
+    reelId: context?.reelId ?? "unknown",
+    campaignId: product.campaign.campaignId,
+    landingPageVersion: "phase1",
+  }), [context?.reelId, customerId, inquiryId, product.campaign.campaignId, product.productId, sessionId]);
   useEffect(() => {
     heading.current?.focus();
-    if (context) void trackFunnelEvent("product_revealed", tracking);
-  }, []);
+    if (hasTrackingContext) void trackFunnelEvent("product_revealed", tracking);
+  }, [hasTrackingContext, tracking]);
   return (
     <div className="reveal" aria-live="polite">
       <Progress active={1} />

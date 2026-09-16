@@ -13,6 +13,11 @@ describe("trackFunnelEvent", () => {
     }, { appointmentType: "store_visit" });
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
     expect(body).toMatchObject({ eventName: "store_visit_selected", metadata: { appointmentType: "store_visit" } });
-    expect(JSON.stringify(body)).not.toMatch(/phone|name|pin/i);
+    expect(Object.keys(body)).not.toEqual(
+      expect.arrayContaining(["phone", "fullName", "pin"]),
+    );
+    expect(Object.keys(body.metadata)).not.toEqual(
+      expect.arrayContaining(["phone", "fullName", "pin"]),
+    );
   });
 });

@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-15
 
-**Status:** Approved design direction, pending written-spec review
+**Status:** Approved and implemented
 
 **Source of truth:** `MK_Jewels_Instagram_Lead_Funnel_PRD.docx`
 
