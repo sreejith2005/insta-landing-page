@@ -94,19 +94,13 @@ export const leadSubmissionSchema = z.object({
 
 export const eventNames = [
   "landing_view",
-  "product_context_resolved",
-  "product_context_failed",
+  "context_resolved",
+  "context_failed",
   "form_started",
   "form_validation_failed",
   "form_submitted",
   "repeat_customer_detected",
-  "product_revealed",
-  "calendly_opened",
-  "store_visit_selected",
-  "video_consultation_selected",
-  "appointment_booked",
-  "whatsapp_clicked",
-  "callback_requested",
+  "offer_unlocked",
 ] as const;
 
 export const eventSchema = z.object({
@@ -119,31 +113,5 @@ export const eventSchema = z.object({
   metadata: z.record(z.string(), z.union([z.string().max(120), z.number(), z.boolean()])).optional(),
 });
 
-export const callbackSchema = z.object({
-  inquiryId: z.string().min(1).max(80),
-  sessionId: z.uuid(),
-  idempotencyKey,
-});
-
-export const appointmentTypes = ["store_visit", "video_consultation"] as const;
-
-/**
- * Posted when Calendly reports a confirmed booking. The Calendly URIs are
- * opaque references, never invitee names or email addresses.
- */
-export const appointmentSchema = z.object({
-  inquiryId: z.string().min(1).max(80),
-  customerId: z.string().max(80).optional(),
-  sessionId: z.uuid(),
-  ...attributionFields,
-  landingPageVersion: identifier,
-  appointmentType: z.enum(appointmentTypes),
-  eventUri: z.string().trim().max(300).regex(/^https:\/\/api\.calendly\.com\//).optional(),
-  inviteeUri: z.string().trim().max(300).regex(/^https:\/\/api\.calendly\.com\//).optional(),
-  idempotencyKey,
-});
-
 export type LeadSubmissionInput = z.infer<typeof leadSubmissionSchema>;
 export type EventInput = z.infer<typeof eventSchema>;
-export type CallbackInput = z.infer<typeof callbackSchema>;
-export type AppointmentInput = z.infer<typeof appointmentSchema>;

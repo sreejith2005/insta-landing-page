@@ -1,88 +1,63 @@
 # ManyChat Integration Contract
 
-ManyChat owns the Instagram conversation. This application begins only when the
-customer taps the CTA in the DM. The app performs no Instagram automation,
-scraping, or natural-language product matching.
+ManyChat owns the Instagram conversation and product-position resolution. The
+landing page begins only after ManyChat has selected a canonical product ID.
 
-**ManyChat must resolve a canonical `product_id` before sending the link.**
+> **The Product ID is attribution data, not customer-facing product content.**
 
-## Request format
+## Parameters
 
-The CTA opens `/instagram` with query parameters:
-
-| Parameter | Required | Meaning | Format |
-| --- | --- | --- | --- |
-| `product` | Yes | Canonical Product Master `product_id` | Letters, digits, `_`, `-`; max 80 |
-| `reel` | Yes | Originating Reel `reel_id` | Letters, digits, `_`, `-`; max 80 |
-| `campaign` | Yes | Originating campaign `campaign_id` | Letters, digits, `_`, `-`; max 80 |
-| `source` | No | Entry point; defaults to `instagram` | One of `instagram`, `manychat`, `whatsapp`, `direct` |
-| `utm_source` | No | Marketing attribution | Max 120 chars |
-| `utm_medium` | No | Marketing attribution | Max 120 chars |
-| `utm_campaign` | No | Marketing attribution | Max 120 chars |
-| `utm_content` | No | Marketing attribution | Max 120 chars |
-| `utm_term` | No | Marketing attribution | Max 120 chars |
-
-The three identifiers must match one **active** `Product_Master` row as a
-complete triple. Changing any one parameter does not resolve a different
-product — it produces a safe recovery state instead.
-
-## Example 1 — single-product Reel
-
-Reel `R123` shows one bracelet, so ManyChat sends the product ID directly.
-
-```text
-https://funnel.mkjewels.in/instagram?product=MKBR639&reel=R123&campaign=RAKHI26&source=instagram&utm_source=instagram&utm_medium=reel&utm_campaign=rakhi26
-```
-
-Required `Product_Master` row:
-
-| product_id | reel_id | campaign_id | product_position | active_status |
-| --- | --- | --- | --- | --- |
-| `MKBR639` | `R123` | `RAKHI26` | `1` | `TRUE` |
-
-## Example 2 — multi-product Reel, position already resolved
-
-Reel `R456` shows two rings. The DM flow asks which piece the customer means and
-maps the reply (`second`, `2`, "the solitaire") to a canonical product ID
-**inside ManyChat**. Only the resolved ID is sent.
-
-```text
-https://funnel.mkjewels.in/instagram?product=RG5074&reel=R456&campaign=BRIDAL26&source=manychat&utm_source=instagram&utm_medium=reel&utm_campaign=bridal26&utm_content=position_2
-```
-
-Required `Product_Master` rows:
-
-| product_id | reel_id | campaign_id | product_position | active_status |
-| --- | --- | --- | --- | --- |
-| `RG5073` | `R456` | `BRIDAL26` | `1` | `TRUE` |
-| `RG5074` | `R456` | `BRIDAL26` | `2` | `TRUE` |
-
-`product_position` is the mapping ManyChat reads to turn "second product" into
-`RG5074`. The application stores it for reporting but never resolves a product
-from a position, because position alone is not a trustworthy URL parameter.
-
-## ManyChat setup checklist
-
-1. Create a Custom Field per Reel holding `reel_id` and `campaign_id`.
-2. For a multi-product Reel, add a quick-reply step mapping each option to its
-   canonical `product_id` using the `product_position` column as the reference.
-3. Build the CTA URL from those fields. Do not let the customer type the
-   identifiers.
-4. If ManyChat cannot resolve a single product, do not send the link — keep
-   clarifying in the DM. An unresolvable context only produces a recovery state.
-
-## Failure behaviour
-
-| Situation | Customer sees | Event recorded |
+| Parameter | Required | Meaning |
 | --- | --- | --- |
-| Missing or malformed parameters | "We could not find this selection" | none (nothing valid to attribute) |
-| Triple matches no row | "We could not find this selection" | `product_context_failed` (`reason: missing`) |
-| Row exists but `active_status` is not true | "This piece is currently unavailable" | `product_context_failed` (`reason: inactive`) |
-| Unapproved `source` value | "We could not find this selection" | none |
+| `product` | Yes | Canonical `Product_Master.product_id` |
+| `reel` | Yes | Originating `reel_id` |
+| `campaign` | Yes | Originating `campaign_id` |
+| `source` | No | `instagram`, `manychat`, `whatsapp`, or `direct` |
+| `utm_source` | No | Marketing attribution |
+| `utm_medium` | No | Marketing attribution |
+| `utm_campaign` | No | Marketing attribution |
+| `utm_content` | No | Marketing attribution, including resolved position |
+| `utm_term` | No | Marketing attribution |
 
-## Not in scope
+Identifiers allow letters, digits, `_`, and `-`, up to 80 characters. UTM
+values are bounded and validated before persistence.
 
-- Unofficial Instagram automation, scraping, or mass DM sending.
-- Product matching from free text inside this application.
-- Signed context tokens. The URL contract above is the current agreement; a
-  signed opaque token is the intended hardening step before wide rollout.
+## Single-product example
+
+```text
+/instagram?product=MK001&reel=R101&campaign=RAKHI26&source=manychat
+```
+
+Required active Product_Master row:
+
+```text
+MK001 | Internal reporting name | R101 | RAKHI26 | 1 | TRUE
+```
+
+## Multi-product example
+
+If the customer says "second one", ManyChat resolves that phrase to `MK002`.
+
+```text
+/instagram?product=MK002&reel=R101&campaign=RAKHI26&source=manychat&utm_content=position_2
+```
+
+Relevant Product_Master rows:
+
+| product_id | product_name | reel_id | campaign_id | product_position | active_status |
+| --- | --- | --- | --- | --- | --- |
+| `MK001` | Internal name 1 | `R101` | `RAKHI26` | `1` | `TRUE` |
+| `MK002` | Internal name 2 | `R101` | `RAKHI26` | `2` | `TRUE` |
+| `MK003` | Internal name 3 | `R101` | `RAKHI26` | `3` | `TRUE` |
+
+The website records `MK002`. It does not interpret "second one" and does not
+display `MK002` or its internal name.
+
+## Validation and failure behavior
+
+The `product + reel + campaign` tuple must match one active row exactly.
+Changing any member of the tuple produces a safe recovery state. Missing or
+malformed parameters cannot be attributed and do not produce an event.
+
+ManyChat must not create a landing URL until it has resolved a single product.
+The app performs no Instagram automation, scraping, or free-text matching.

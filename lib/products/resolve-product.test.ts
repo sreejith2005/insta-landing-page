@@ -3,18 +3,16 @@ import { describe, expect, it } from "vitest";
 import type { ProductRecord, ProductRepository } from "./contracts";
 import { resolveProductContext } from "./resolve-product";
 
-const product: ProductRecord = {
-  productId: "MKBR639",
-  productName: "Gold Open-Back Diamond Accented Bracelet",
-  reelId: "R123",
+const mapping: ProductRecord = {
+  productId: "MK001",
+  productName: "Internal reporting name",
+  reelId: "R101",
   campaignId: "RAKHI26",
+  productPosition: 1,
+  category: "Bracelet",
+  collection: "Rakhi 2026",
+  campaignName: "Rakhi Offer 2026",
   active: true,
-  productImage: null,
-  specifications: [{ label: "Purity", value: "18K" }],
-  offerCopy: "30% off making charges",
-  calendly: {},
-  ctas: { whatsappEnabled: true, callbackEnabled: true },
-  internalPrice: "301032",
 };
 
 function repository(record: ProductRecord | null): ProductRepository {
@@ -22,35 +20,50 @@ function repository(record: ProductRecord | null): ProductRepository {
 }
 
 describe("resolveProductContext", () => {
-  it("returns a safe active product and omits internal price", async () => {
+  it("returns only the internal attribution mapping for an active exact tuple", async () => {
     const result = await resolveProductContext(
-      { productId: "MKBR639", reelId: "R123", campaignId: "RAKHI26" },
-      repository(product),
+      { productId: "MK001", reelId: "R101", campaignId: "RAKHI26" },
+      repository(mapping),
     );
-    expect(result.status).toBe("resolved");
-    expect(JSON.stringify(result)).not.toContain("301032");
+
+    expect(result).toEqual({
+      status: "resolved",
+      context: {
+        productId: "MK001",
+        productName: "Internal reporting name",
+        reelId: "R101",
+        campaignId: "RAKHI26",
+        productPosition: 1,
+        category: "Bracelet",
+        collection: "Rakhi 2026",
+        campaignName: "Rakhi Offer 2026",
+      },
+    });
+    expect(JSON.stringify(result)).not.toMatch(
+      /productImage|specifications|price|calendly|whatsapp|callback/i,
+    );
   });
 
-  it("rejects a mismatched mapping even if a repository returns a record", async () => {
+  it("rejects a mismatched tuple even if a repository returns a mapping", async () => {
     const result = await resolveProductContext(
-      { productId: "OTHER", reelId: "R123", campaignId: "RAKHI26" },
-      repository(product),
+      { productId: "OTHER", reelId: "R101", campaignId: "RAKHI26" },
+      repository(mapping),
     );
     expect(result.status).toBe("invalid");
   });
 
-  it("distinguishes missing and inactive products", async () => {
+  it("distinguishes missing and inactive mappings", async () => {
     await expect(
       resolveProductContext(
-        { productId: "MISS", reelId: "R123", campaignId: "RAKHI26" },
+        { productId: "MISS", reelId: "R101", campaignId: "RAKHI26" },
         repository(null),
       ),
-    ).resolves.toMatchObject({ status: "missing" });
+    ).resolves.toEqual({ status: "missing" });
     await expect(
       resolveProductContext(
-        { productId: "MKBR639", reelId: "R123", campaignId: "RAKHI26" },
-        repository({ ...product, active: false }),
+        { productId: "MK001", reelId: "R101", campaignId: "RAKHI26" },
+        repository({ ...mapping, active: false }),
       ),
-    ).resolves.toMatchObject({ status: "inactive" });
+    ).resolves.toEqual({ status: "inactive" });
   });
 });

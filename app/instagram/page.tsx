@@ -5,7 +5,7 @@ import { after } from "next/server";
 import { BrandHeader } from "@/components/brand/BrandHeader";
 import { ContextState } from "@/components/landing/ContextState";
 import { FunnelExperience } from "@/components/landing/FunnelExperience";
-import { experienceDefaults, publicEnv, serverEnv } from "@/lib/config/env";
+import { publicEnv, serverEnv } from "@/lib/config/env";
 import { repository } from "@/lib/providers/repository";
 import { resolveProductContext } from "@/lib/products/resolve-product";
 import { incomingContextSchema } from "@/lib/validation/schemas";
@@ -37,11 +37,7 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
   const runtime = publicEnv();
   let resolved;
   try {
-    resolved = await resolveProductContext(
-      parsed.data,
-      await repository(),
-      experienceDefaults(env),
-    );
+    resolved = await resolveProductContext(parsed.data, await repository());
   } catch (error) {
     console.error("Product context resolution failed:", error);
     return <ContextState status="invalid" supportUrl={supportUrl} />;
@@ -56,7 +52,7 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
         const { recordEvent } = await import("@/lib/analytics/record-event");
         await recordEvent(
           {
-            eventName: "product_context_failed",
+            eventName: "context_failed",
             sessionId: randomUUID(),
             ...context,
             landingPageVersion: runtime.landingPageVersion,
@@ -76,10 +72,10 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
       <BrandHeader preview={runtime.isPreview} />
       <FunnelExperience
         context={parsed.data}
-        teaser={resolved.product}
         runtime={{
           landingPageVersion: runtime.landingPageVersion,
-          captureBookings: runtime.captureBookings,
+          offerUnlockedCopy: runtime.offerUnlockedCopy,
+          representativeContactCopy: runtime.representativeContactCopy,
         }}
       />
     </div>

@@ -1,0 +1,3 @@
+product_id,product_name,reel_id,campaign_id,product_position,active_status,category,collection,campaign_name
+MK001,Internal reporting name,R101,RAKHI26,1,TRUE,Bracelet,Rakhi 2026,Rakhi Offer 2026
+MK002,Internal reporting name 2,R101,RAKHI26,2,TRUE,Ring,Rakhi 2026,Rakhi Offer 2026

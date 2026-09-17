@@ -1,14 +1,15 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test, type Page } from "@playwright/test";
 
-const validUrl = "/instagram?product=MKBR639&reel=R123&campaign=RAKHI26";
+const validUrl =
+  "/instagram?product=MKBR639&reel=R123&campaign=RAKHI26&source=manychat&utm_source=instagram&utm_medium=reel&utm_campaign=rakhi26";
 const secondProductUrl =
-  "/instagram?product=RG5074&reel=R456&campaign=BRIDAL26&source=manychat&utm_source=instagram&utm_medium=reel";
-
-/** Keeps each case in its own submission rate-limit bucket. See overflow.spec. */
-let nextAddress = 1;
+  "/instagram?product=RG5074&reel=R456&campaign=BRIDAL26&source=manychat&utm_source=instagram&utm_medium=reel&utm_content=position_2";
 
 async function isolate(page: Page) {
-  await page.setExtraHTTPHeaders({ "x-forwarded-for": `198.51.100.${100 + nextAddress++}` });
+  const address = randomUUID().replaceAll("-", "").match(/.{4}/g)?.join(":");
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": address ?? randomUUID() });
 }
 
 async function submitLead(page: Page, phone: string) {
@@ -16,44 +17,38 @@ async function submitLead(page: Page, phone: string) {
   await page.getByLabel("Mobile Number").fill(phone);
   await page.getByLabel("PIN Code").fill("400001");
   await page.getByLabel("City").fill("Mumbai");
-  await page.getByRole("button", { name: "Unlock my selected piece" }).click();
+  await page.getByRole("button", { name: "Unlock my offer" }).click();
 }
 
-test("valid preview lead reveals the selected product and conversion choices", async ({ page }) => {
+test("valid context captures a lead and shows only generic confirmation", async ({ page }) => {
   await isolate(page);
   await page.goto(validUrl);
-  await expect(page.getByRole("heading", { name: "Your selected piece is waiting" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Share your details with MK Jewels" }),
+  ).toBeVisible();
+  await expect(page.getByText(/MKBR639|Gold Open-Back|Purity|price/i)).toHaveCount(0);
+
   await submitLead(page, "9876543210");
-  await expect(page.getByRole("heading", { name: "Meet your selected piece" })).toBeVisible();
-  await expect(page.getByText("Gold Open-Back Diamond Accented Bracelet")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Store Visit/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Video Consultation/ })).toBeVisible();
-  await expect(page.getByText(/₹/)).toHaveCount(0);
-  await expect(page.getByText(/Visit Website/i)).toHaveCount(0);
-  await page.getByRole("button", { name: "Request a Callback" }).click();
-  await expect(page.getByRole("status")).toContainText("contact you");
-  await page.getByRole("button", { name: /Store Visit/ }).click();
-  await expect(page.getByText(/Online scheduling is currently unavailable/)).toBeVisible();
+
+  await expect(
+    page.getByRole("heading", { name: "Your promotional offer has been unlocked." }),
+  ).toBeVisible();
+  await expect(page.getByText(/representative will contact you shortly/i)).toBeVisible();
+  await expect(
+    page.getByText(/MKBR639|Gold Open-Back|Purity|Store Visit|Video Consultation|WhatsApp|Callback/i),
+  ).toHaveCount(0);
 });
 
-test("a returning phone number is recognised while the new product still creates an enquiry", async ({
-  page,
-}) => {
-  // First enquiry establishes the customer.
+test("a repeat phone creates another enquiry without exposing the new product", async ({ page }) => {
   await isolate(page);
   await page.goto(validUrl);
-  await expect(page.getByRole("heading", { name: "Your selected piece is waiting" })).toBeVisible();
   await submitLead(page, "9812345678");
-  await expect(page.getByRole("heading", { name: "Meet your selected piece" })).toBeVisible();
-  await expect(page.getByText(/Welcome back/)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /offer has been unlocked/i })).toBeVisible();
 
-  // Same customer, different Reel, campaign and product.
   await page.goto(secondProductUrl);
-  await expect(page.getByRole("heading", { name: "Your selected piece is waiting" })).toBeVisible();
   await submitLead(page, "9812345678");
-  await expect(page.getByRole("heading", { name: "Meet your selected piece" })).toBeVisible();
   await expect(page.getByText(/Welcome back/)).toBeVisible();
-  await expect(page.getByText("Selected Diamond Solitaire Ring")).toBeVisible();
+  await expect(page.getByText(/RG5074|Selected Diamond Solitaire Ring/i)).toHaveCount(0);
 });
 
 test("missing and inactive contexts fail safely", async ({ page }) => {
@@ -63,20 +58,20 @@ test("missing and inactive contexts fail safely", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "This piece is currently unavailable" })).toBeVisible();
 });
 
-test("a tampered product parameter cannot resolve another product", async ({ page }) => {
+test("a tampered product parameter cannot resolve another mapping", async ({ page }) => {
   await page.goto("/instagram?product=RG5074&reel=R123&campaign=RAKHI26");
   await expect(page.getByRole("heading", { name: "We could not find this selection" })).toBeVisible();
 });
 
 test("an unapproved source is rejected", async ({ page }) => {
-  await page.goto(`${validUrl}&source=facebook`);
+  await page.goto("/instagram?product=MKBR639&reel=R123&campaign=RAKHI26&source=facebook");
   await expect(page.getByRole("heading", { name: "We could not find this selection" })).toBeVisible();
 });
 
 test("invalid input remains gated", async ({ page }) => {
   await isolate(page);
   await page.goto(validUrl);
-  await page.getByRole("button", { name: "Unlock my selected piece" }).click();
+  await page.getByRole("button", { name: "Unlock my offer" }).click();
   await expect(page.getByText("Enter your full name.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Meet your selected piece" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /offer has been unlocked/i })).toHaveCount(0);
 });

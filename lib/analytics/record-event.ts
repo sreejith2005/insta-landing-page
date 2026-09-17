@@ -6,11 +6,8 @@ import type { EventInput } from "@/lib/validation/schemas";
  * all lead PII — is dropped before the write.
  */
 const allowedMetadata = new Set([
-  "appointmentType",
   "reason",
-  "embedStatus",
   "productPosition",
-  "hasImage",
 ]);
 
 export async function recordEvent(input: EventInput, repository: FunnelRepository) {

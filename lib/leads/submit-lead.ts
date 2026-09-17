@@ -1,19 +1,12 @@
-import type { FunnelRepository, SubmitLeadOptions, SubmitLeadResult } from "./contracts";
 import { resolveProductContext } from "@/lib/products/resolve-product";
 import type { LeadSubmissionInput } from "@/lib/validation/schemas";
+import type { FunnelRepository, SubmitLeadResult } from "./contracts";
 
-/**
- * Filters naive scripted posts only. The floor is deliberately low: a customer
- * using browser autofill can legitimately submit in a few hundred milliseconds,
- * and a determined bot can simply omit this optional field. The honeypot (schema
- * enforced) and the endpoint rate limit are the real protections.
- */
 const MINIMUM_ELAPSED_MS = 150;
 
 export async function submitLead(
   input: LeadSubmissionInput,
   repository: FunnelRepository,
-  options: SubmitLeadOptions = {},
 ): Promise<SubmitLeadResult> {
   if (input.elapsedMs !== undefined && input.elapsedMs < MINIMUM_ELAPSED_MS) {
     return { ok: false, code: "rejected", message: "We could not verify this submission." };
@@ -22,17 +15,16 @@ export async function submitLead(
   const resolved = await resolveProductContext(
     { productId: input.productId, reelId: input.reelId, campaignId: input.campaignId },
     repository,
-    options.defaults,
   );
   if (resolved.status === "inactive") {
-    return { ok: false, code: "inactive_product", message: "This piece is currently unavailable." };
+    return { ok: false, code: "inactive_product", message: "This enquiry is unavailable." };
   }
   if (resolved.status !== "resolved") {
-    return { ok: false, code: "invalid_product", message: "We could not verify this selection." };
+    return { ok: false, code: "invalid_product", message: "We could not verify this enquiry." };
   }
 
   try {
-    const accepted = await repository.acceptLead(input);
+    const accepted = await repository.acceptLead(input, resolved.context.productName);
     if (!accepted.wasReplay) {
       const eventBase = {
         sessionId: input.sessionId,
@@ -54,8 +46,8 @@ export async function submitLead(
         if (accepted.isRepeatCustomer) {
           await repository.recordEvent({ eventName: "repeat_customer_detected", ...eventBase });
         }
+        await repository.recordEvent({ eventName: "offer_unlocked", ...eventBase });
       } catch {
-        // Analytics must never fail an accepted lead.
         console.error("Funnel event write failed", { inquiryId: accepted.inquiryId });
       }
     }
@@ -64,7 +56,6 @@ export async function submitLead(
       inquiryId: accepted.inquiryId,
       customerId: accepted.customerId,
       isRepeatCustomer: accepted.isRepeatCustomer,
-      product: resolved.product,
     };
   } catch {
     return {

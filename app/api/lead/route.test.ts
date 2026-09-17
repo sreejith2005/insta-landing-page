@@ -1,15 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { POST } from "./route";
-
-/**
- * Route-level cover for a defect the service-level tests could not see:
- * `submitLead` accepted experience defaults, but the route never passed them,
- * so globally configured Calendly and WhatsApp settings never reached the
- * reveal and the primary conversion path was dead in any deployment that
- * configured them by environment rather than per Product Master row.
- */
-const originalEnv = { ...process.env };
 
 function leadRequest(body: Record<string, unknown>, ip: string) {
   return new Request("http://localhost:3000/api/lead", {
@@ -37,38 +28,22 @@ function lead(overrides: Record<string, unknown> = {}) {
   };
 }
 
-beforeEach(() => {
-  process.env.CALENDLY_STORE_VISIT_URL = "https://calendly.com/mk/store-visit";
-  process.env.CALENDLY_VIDEO_URL = "https://calendly.com/mk/video";
-  process.env.WHATSAPP_NUMBER = "919999999999";
-});
-
-afterEach(() => {
-  process.env = { ...originalEnv };
-});
-
 describe("POST /api/lead", () => {
-  it("delivers the globally configured Calendly and WhatsApp settings to the reveal", async () => {
+  it("returns identifier-only success without Product_Master content", async () => {
     const response = await POST(leadRequest(lead(), "203.0.113.11"));
     expect(response.status).toBe(201);
     const body = await response.json();
-    expect(body.ok).toBe(true);
-    expect(body.product.calendly).toEqual({
-      storeVisitUrl: "https://calendly.com/mk/store-visit",
-      videoConsultationUrl: "https://calendly.com/mk/video",
-    });
-    expect(body.product.whatsapp.number).toBe("919999999999");
+    expect(body).toMatchObject({ ok: true, isRepeatCustomer: false });
+    expect(body.inquiryId).toMatch(/^inq_/);
+    expect(body.customerId).toMatch(/^cus_/);
+    expect(JSON.stringify(body)).not.toMatch(
+      /productName|MKBR639|image|specification|price|calendly|whatsapp/i,
+    );
   });
 
-  it("never exposes a price on the accepted product", async () => {
-    const response = await POST(leadRequest(lead({ mobileNumber: "9876500012" }), "203.0.113.12"));
-    const body = await response.json();
-    expect(JSON.stringify(body)).not.toMatch(/price|internalPrice|₹/i);
-  });
-
-  it("returns field errors instead of an internal message when input is invalid", async () => {
+  it("returns field errors instead of internal details when input is invalid", async () => {
     const response = await POST(
-      leadRequest(lead({ pinCode: "000000", mobileNumber: "12345" }), "203.0.113.13"),
+      leadRequest(lead({ pinCode: "000000", mobileNumber: "12345" }), "203.0.113.12"),
     );
     expect(response.status).toBe(400);
     const body = await response.json();

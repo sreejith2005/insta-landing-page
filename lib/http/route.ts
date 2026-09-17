@@ -1,10 +1,8 @@
-import { MemoryRateLimiter } from "@/lib/rate-limit/memory";
+import { createRateLimiter } from "@/lib/rate-limit/create-limiter";
 
 const mutationLimiters = {
-  lead: new MemoryRateLimiter({ limit: 6, windowMs: 60_000 }),
-  callback: new MemoryRateLimiter({ limit: 6, windowMs: 60_000 }),
-  appointment: new MemoryRateLimiter({ limit: 10, windowMs: 60_000 }),
-  events: new MemoryRateLimiter({ limit: 40, windowMs: 60_000 }),
+  lead: createRateLimiter({ limit: 6, windowMs: 60_000, prefix: "ratelimit:lead" }),
+  events: createRateLimiter({ limit: 40, windowMs: 60_000, prefix: "ratelimit:events" }),
 };
 
 function jsonError(status: number, message: string) {
@@ -50,12 +48,15 @@ export function guardMutationRequest(request: Request): Response | null {
 /**
  * Fixed-window limit per client address.
  *
- * Two deployment assumptions matter here. `x-forwarded-for` is trusted, so the
- * application must sit behind a proxy that overwrites it (Vercel and equivalent
- * hosts do); if the host merely appends, a client can rotate the header and
- * bypass the limit entirely. And the counters are process-local, so a
- * horizontally scaled deployment multiplies every limit by the instance count.
- * See `docs/PHASE_2.md` for the shared durable limiter this must become.
+ * `x-forwarded-for` is trusted, so the application must sit behind a proxy
+ * that overwrites it (Vercel and equivalent hosts do); if the host merely
+ * appends, a client can rotate the header and bypass the limit entirely.
+ *
+ * The limiter itself is backed by Upstash Redis (`lib/rate-limit/redis.ts`)
+ * whenever UPSTASH_REDIS_REST_URL/TOKEN are configured, so limits hold across
+ * every serverless instance. Without those variables it falls back to the
+ * process-local in-memory limiter, which is only correct for a single dev
+ * instance — see `.env.example`.
  */
 export async function enforceRateLimit(request: Request, endpoint: keyof typeof mutationLimiters) {
   const address = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";

@@ -14,32 +14,27 @@ const input: LeadSubmissionInput = {
   campaignId: "RAKHI26",
   source: "instagram",
   sessionId: "d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4",
-  idempotencyKey: "d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4:MKBR639:001",
+  idempotencyKey: "lead:d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4:MKBR639:R123:RAKHI26",
   landingPageVersion: "phase1",
 };
 
 describe("submitLead", () => {
-  it("creates one customer and distinct inquiries for repeat interest", async () => {
+  it("returns identifiers only and records form and offer events after persistence", async () => {
     const repository = new PreviewRepository();
-    const first = await submitLead(input, repository);
-    const second = await submitLead(
-      { ...input, idempotencyKey: `${input.idempotencyKey}:2` },
-      repository,
-    );
-    expect(first.ok && second.ok).toBe(true);
-    if (first.ok && second.ok) {
-      expect(second.customerId).toBe(first.customerId);
-      expect(second.inquiryId).not.toBe(first.inquiryId);
-      expect(second.isRepeatCustomer).toBe(true);
-    }
+    const result = await submitLead(input, repository);
+
+    expect(result).toMatchObject({
+      ok: true,
+      isRepeatCustomer: false,
+    });
+    expect(JSON.stringify(result)).not.toMatch(/productName|productImage|specification|price/i);
     expect(repository.snapshot().events.map((event) => event.eventName)).toEqual([
       "form_submitted",
-      "form_submitted",
-      "repeat_customer_detected",
+      "offer_unlocked",
     ]);
   });
 
-  it("keeps the new product, Reel and campaign when a known phone returns", async () => {
+  it("reuses a customer while creating a separately attributed inquiry", async () => {
     const repository = new PreviewRepository();
     const first = await submitLead(input, repository);
     const second = await submitLead(
@@ -54,55 +49,47 @@ describe("submitLead", () => {
       },
       repository,
     );
+
     expect(first.ok && second.ok).toBe(true);
     if (!first.ok || !second.ok) return;
-
     expect(second.customerId).toBe(first.customerId);
+    expect(second.inquiryId).not.toBe(first.inquiryId);
     expect(second.isRepeatCustomer).toBe(true);
-    expect(second.product.productId).toBe("RG5073");
 
-    const { inquiries } = repository.snapshot();
-    expect(inquiries).toHaveLength(2);
-    expect(inquiries[1]).toMatchObject({
+    expect(repository.snapshot().inquiries[1]).toMatchObject({
       productId: "RG5073",
+      productName: "Selected Gold Ring",
       reelId: "R456",
       campaignId: "BRIDAL26",
       utmCampaign: "bridal26",
       customerId: first.customerId,
     });
+    expect(repository.snapshot().events.map((event) => event.eventName)).toEqual([
+      "form_submitted",
+      "offer_unlocked",
+      "form_submitted",
+      "repeat_customer_detected",
+      "offer_unlocked",
+    ]);
   });
 
-  it("applies experience defaults without overriding product configuration", async () => {
-    const repository = new PreviewRepository();
-    const result = await submitLead(input, repository, {
-      defaults: {
-        calendly: { storeVisitUrl: "https://calendly.com/mk/store" },
-        whatsapp: { number: "919999999999" },
-      },
-    });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.product.calendly.storeVisitUrl).toBe("https://calendly.com/mk/store");
-      expect(result.product.whatsapp.number).toBe("919999999999");
-    }
-  });
-
-  it("replays an idempotent submission without a second inquiry", async () => {
+  it("replays idempotently without another inquiry or event", async () => {
     const repository = new PreviewRepository();
     const first = await submitLead(input, repository);
     const replay = await submitLead(input, repository);
     expect(replay).toEqual(first);
-    expect(repository.snapshot().events).toHaveLength(1);
+    expect(repository.snapshot().inquiries).toHaveLength(1);
+    expect(repository.snapshot().events).toHaveLength(2);
   });
 
-  it("rejects a submission completed faster than a human can type", async () => {
+  it("rejects an implausibly fast submission", async () => {
     const repository = new PreviewRepository();
     const result = await submitLead({ ...input, elapsedMs: 40 }, repository);
     expect(result).toMatchObject({ ok: false, code: "rejected" });
     expect(repository.snapshot().inquiries).toHaveLength(0);
   });
 
-  it("withholds the reveal when persistence fails", async () => {
+  it("returns a safe failure without accepting a lead when persistence fails", async () => {
     const repository = new PreviewRepository({ failWrites: true });
     const result = await submitLead(input, repository);
     expect(result).toEqual({

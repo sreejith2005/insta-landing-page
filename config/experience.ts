@@ -6,33 +6,18 @@ export const leadFields = [
 ] as const;
 
 export const experienceCopy = {
-  heading: "Your selected piece is waiting",
-  introduction: "Share your details to privately view the design you chose on Instagram.",
-  submit: "Unlock my selected piece",
+  heading: "Share your details with MK Jewels",
+  introduction: "Tell us how to reach you about the piece you enquired about.",
+  submit: "Unlock my offer",
   privacy: "Your details are used only to assist with this enquiry.",
-  repeatWelcome: "Welcome back. We have added this piece to your enquiries.",
-};
+  offerUnlocked: "Your promotional offer has been unlocked.",
+  representativeContact:
+    "An MK Jewels representative will contact you shortly regarding your enquiry.",
+  repeatWelcome: "Welcome back. We have added this enquiry to your customer record.",
+} as const;
 
-export const appointmentCopy: Record<
-  "store_visit" | "video_consultation",
-  { label: string; description: string }
-> = {
-  store_visit: {
-    label: "Store Visit",
-    description: "See the piece in person with a jewellery expert.",
-  },
-  video_consultation: {
-    label: "Video Consultation",
-    description: "Explore the design live from wherever you are.",
-  },
-};
-
-/**
- * Default WhatsApp wording. `WHATSAPP_MESSAGE_TEMPLATE` or a Product Master row
- * overrides it. Placeholders are replaced with non-sensitive references only.
- */
-export const defaultWhatsappTemplate =
-  "Hello MK Jewels, I would like to know more about {productName} ({productId}). My enquiry reference is {inquiryId}.";
+/** Empty until MK Jewels supplies and approves factual metrics. */
+export const approvedTrustMetrics = [] as const;
 
 /** Name of the honeypot control. Hidden from customers and assistive tech. */
 export const honeypotField = "company";

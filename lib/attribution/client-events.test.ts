@@ -9,7 +9,7 @@ describe("trackFunnelEvent", () => {
     const fetchSpy = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
     vi.stubGlobal("fetch", fetchSpy);
     await trackFunnelEvent(
-      "store_visit_selected",
+      "offer_unlocked",
       {
         sessionId: "d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4",
         inquiryId: "inq_1",
@@ -21,14 +21,14 @@ describe("trackFunnelEvent", () => {
         utmCampaign: "rakhi26",
         landingPageVersion: "phase1",
       },
-      { appointmentType: "store_visit" },
+      { reason: "accepted" },
     );
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
     expect(body).toMatchObject({
-      eventName: "store_visit_selected",
+      eventName: "offer_unlocked",
       source: "instagram",
       utmCampaign: "rakhi26",
-      metadata: { appointmentType: "store_visit" },
+      metadata: { reason: "accepted" },
     });
     expect(Object.keys(body)).not.toEqual(
       expect.arrayContaining(["phone", "fullName", "pin", "mobileNumber"]),

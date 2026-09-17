@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { appointmentSchema, incomingContextSchema, leadSubmissionSchema } from "./schemas";
+import { eventSchema, incomingContextSchema, leadSubmissionSchema } from "./schemas";
 
 const valid = {
   fullName: "Ananya Shah",
@@ -73,32 +73,19 @@ describe("incomingContextSchema", () => {
   });
 });
 
-describe("appointmentSchema", () => {
-  const booking = {
-    inquiryId: "inq_1",
-    sessionId: "d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4",
-    productId: "MKBR639",
-    reelId: "R123",
-    campaignId: "RAKHI26",
-    source: "instagram",
-    landingPageVersion: "phase1",
-    appointmentType: "store_visit",
-    idempotencyKey: "apt:d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4:store_visit",
-  };
-
-  it("accepts a Calendly-issued event reference", () => {
-    expect(
-      appointmentSchema.parse({
-        ...booking,
-        eventUri: "https://api.calendly.com/scheduled_events/abc",
-      }).appointmentType,
-    ).toBe("store_visit");
-  });
-
-  it("rejects an appointment type or event URI it did not issue", () => {
-    expect(() => appointmentSchema.parse({ ...booking, appointmentType: "walk_in" })).toThrow();
-    expect(() =>
-      appointmentSchema.parse({ ...booking, eventUri: "https://evil.example/booking" }),
-    ).toThrow();
+describe("eventSchema", () => {
+  it("accepts the attribution-only lifecycle and rejects removed reveal events", () => {
+    const baseEvent = {
+      sessionId: valid.sessionId,
+      productId: valid.productId,
+      reelId: valid.reelId,
+      campaignId: valid.campaignId,
+      source: valid.source,
+      landingPageVersion: valid.landingPageVersion,
+    };
+    expect(eventSchema.parse({ ...baseEvent, eventName: "offer_unlocked" }).eventName).toBe(
+      "offer_unlocked",
+    );
+    expect(() => eventSchema.parse({ ...baseEvent, eventName: "product_revealed" })).toThrow();
   });
 });

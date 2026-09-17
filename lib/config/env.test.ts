@@ -29,4 +29,31 @@ describe("parseServerEnv", () => {
       }),
     ).toThrow(/Google Sheets configuration/i);
   });
+
+  it("uses one flat Product_Master tab and accepts blank optional public URLs", () => {
+    // A platform env-var UI (or a blank .env line) commonly stores "" rather
+    // than omitting the key entirely; this must not crash env parsing.
+    const parsed = parseServerEnv({
+      ...base,
+      NODE_ENV: "test",
+      DATA_PROVIDER: "preview",
+      GOOGLE_PRODUCT_SHEET: "Product_Master",
+      NEXT_PUBLIC_BRAND_VIDEO_URL: "",
+      ASSISTED_SUPPORT_URL: "",
+    });
+    expect(parsed.google.sheets.products).toBe("Product_Master");
+    expect(parsed.public.brandVideoUrl).toBeUndefined();
+    expect(parsed.assistedSupportUrl).toBeUndefined();
+  });
+
+  it("rejects a non-https brand video URL", () => {
+    expect(() =>
+      parseServerEnv({
+        ...base,
+        NODE_ENV: "test",
+        DATA_PROVIDER: "preview",
+        NEXT_PUBLIC_BRAND_VIDEO_URL: "http://insecure.example",
+      }),
+    ).toThrow(/https/i);
+  });
 });

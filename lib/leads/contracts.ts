@@ -1,10 +1,5 @@
-import type { ExperienceDefaults, ProductRepository } from "@/lib/products/contracts";
-import type {
-  AppointmentInput,
-  EventInput,
-  LeadSubmissionInput,
-} from "@/lib/validation/schemas";
-import type { PublicProductContext } from "@/types/funnel";
+import type { ProductRepository } from "@/lib/products/contracts";
+import type { EventInput, LeadSubmissionInput } from "@/lib/validation/schemas";
 
 export type AcceptedLeadRecord = {
   inquiryId: string;
@@ -12,30 +7,24 @@ export type AcceptedLeadRecord = {
   isRepeatCustomer: boolean;
 };
 
-export type CallbackRecord = { callbackId: string; inquiryId: string };
+export type InquiryCountFilter = {
+  productId: string;
+  reelId?: string;
+  campaignId?: string;
+  since?: string;
+};
 
-export type AppointmentRecord = { appointmentId: string; inquiryId: string };
-
-/**
- * The single persistence port. Google Sheets is one implementation; swapping in
- * the MK Jewels FMS means implementing this interface only, with no frontend or
- * service changes.
- */
 export interface FunnelRepository extends ProductRepository {
-  acceptLead(input: LeadSubmissionInput): Promise<AcceptedLeadRecord & { wasReplay: boolean }>;
+  acceptLead(
+    input: LeadSubmissionInput,
+    productName: string,
+  ): Promise<AcceptedLeadRecord & { wasReplay: boolean }>;
   recordEvent(input: EventInput): Promise<void>;
-  requestCallback(input: {
-    inquiryId: string;
-    sessionId: string;
-    idempotencyKey: string;
-  }): Promise<CallbackRecord | null>;
-  recordAppointment(input: AppointmentInput): Promise<AppointmentRecord | null>;
+  countInquiriesForContext(filter: InquiryCountFilter): Promise<number>;
 }
 
-export type SubmitLeadOptions = { defaults?: ExperienceDefaults };
-
 export type SubmitLeadResult =
-  | ({ ok: true; product: PublicProductContext } & AcceptedLeadRecord)
+  | ({ ok: true } & AcceptedLeadRecord)
   | {
       ok: false;
       code: "invalid_product" | "inactive_product" | "rejected" | "service_unavailable";

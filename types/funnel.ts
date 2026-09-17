@@ -27,45 +27,17 @@ export type IncomingInstagramContext = ProductMapping &
     contextToken?: string;
   };
 
-export type Specification = { label: string; value: string };
-
-export type AppointmentType = "store_visit" | "video_consultation";
-
-export type CtaName = AppointmentType | "whatsapp" | "callback";
-
-export type PublicProductContext = {
-  productId: string;
+/** Internal Product_Master record. Product data is attribution, never UI. */
+export type AttributionMapping = ProductMapping & {
   productName: string;
+  productPosition?: number;
   category?: string;
   collection?: string;
-  /** Position of this product within a multi-product Reel, when applicable. */
-  productPosition?: number;
-  productImage: {
-    src: string;
-    alt: string;
-    width: number;
-    height: number;
-  } | null;
-  specifications: Specification[];
-  campaign: {
-    campaignId: string;
-    offerCopy?: string;
-    offerExpiresAt?: string;
-  };
-  calendly: {
-    storeVisitUrl?: string;
-    videoConsultationUrl?: string;
-  };
-  whatsapp: {
-    number?: string;
-    messageTemplate?: string;
-  };
-  ctas: {
-    whatsappEnabled: boolean;
-    callbackEnabled: boolean;
-    order: CtaName[];
-  };
+  campaignName?: string;
+  active: boolean;
 };
+
+export type ResolvedAttributionContext = Omit<AttributionMapping, "active">;
 
 export type LeadFields = {
   fullName: string;
@@ -78,21 +50,14 @@ export type AcceptedInquiry = {
   inquiryId: string;
   customerId: string;
   isRepeatCustomer: boolean;
-  product: PublicProductContext;
 };
 
 export type FunnelEventName =
   | "landing_view"
-  | "product_context_resolved"
-  | "product_context_failed"
+  | "context_resolved"
+  | "context_failed"
   | "form_started"
   | "form_validation_failed"
   | "form_submitted"
   | "repeat_customer_detected"
-  | "product_revealed"
-  | "calendly_opened"
-  | "store_visit_selected"
-  | "video_consultation_selected"
-  | "appointment_booked"
-  | "whatsapp_clicked"
-  | "callback_requested";
+  | "offer_unlocked";

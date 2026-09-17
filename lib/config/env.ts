@@ -1,17 +1,22 @@
 import { z } from "zod";
 
-const httpsUrl = z
+const optionalHttpsUrl = z
   .string()
   .trim()
-  .regex(/^https:\/\/[^\s]+$/)
   .optional()
-  .transform((value) => (value ? value : undefined));
+  .transform((value) => (value ? value : undefined))
+  .refine((value) => value === undefined || /^https:\/\/[^\s]+$/.test(value), {
+    message: "must be an https:// URL",
+  });
 
 const rawSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATA_PROVIDER: z.enum(["preview", "google-sheets"]).default("preview"),
   NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
   NEXT_PUBLIC_LANDING_PAGE_VERSION: z.string().trim().min(1).max(64).default("phase1"),
+  NEXT_PUBLIC_OFFER_UNLOCKED_COPY: z.string().trim().max(240).optional(),
+  NEXT_PUBLIC_REPRESENTATIVE_CONTACT_COPY: z.string().trim().max(320).optional(),
+  NEXT_PUBLIC_BRAND_VIDEO_URL: optionalHttpsUrl,
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().trim().optional(),
   GOOGLE_PRIVATE_KEY: z.string().optional(),
   GOOGLE_SPREADSHEET_ID: z.string().trim().optional(),
@@ -19,19 +24,9 @@ const rawSchema = z.object({
   GOOGLE_CUSTOMER_SHEET: z.string().trim().default("Customers"),
   GOOGLE_INQUIRY_SHEET: z.string().trim().default("Inquiries"),
   GOOGLE_EVENT_SHEET: z.string().trim().default("Events"),
-  GOOGLE_CALLBACK_SHEET: z.string().trim().default("Callback_Requests"),
-  CALENDLY_STORE_VISIT_URL: httpsUrl,
-  CALENDLY_VIDEO_URL: httpsUrl,
-  /** Disabled by default; enable only once Calendly booking events are verified. */
-  CALENDLY_CAPTURE_BOOKINGS: z.enum(["true", "false"]).default("false"),
-  WHATSAPP_NUMBER: z
-    .string()
-    .trim()
-    .regex(/^[1-9][0-9]{7,14}$/)
-    .optional()
-    .transform((value) => (value ? value : undefined)),
-  WHATSAPP_MESSAGE_TEMPLATE: z.string().trim().max(400).optional(),
-  ASSISTED_SUPPORT_URL: httpsUrl,
+  ASSISTED_SUPPORT_URL: optionalHttpsUrl,
+  UPSTASH_REDIS_REST_URL: optionalHttpsUrl,
+  UPSTASH_REDIS_REST_TOKEN: z.string().trim().optional(),
 });
 
 export type ServerEnv = ReturnType<typeof parseServerEnv>;
@@ -57,6 +52,11 @@ export function parseServerEnv(input: Record<string, string | undefined>) {
     dataProvider: raw.DATA_PROVIDER,
     appUrl: raw.NEXT_PUBLIC_APP_URL,
     landingPageVersion: raw.NEXT_PUBLIC_LANDING_PAGE_VERSION,
+    public: {
+      offerUnlockedCopy: raw.NEXT_PUBLIC_OFFER_UNLOCKED_COPY,
+      representativeContactCopy: raw.NEXT_PUBLIC_REPRESENTATIVE_CONTACT_COPY,
+      brandVideoUrl: raw.NEXT_PUBLIC_BRAND_VIDEO_URL,
+    },
     google: {
       serviceAccountEmail: raw.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       privateKey: raw.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
@@ -66,41 +66,18 @@ export function parseServerEnv(input: Record<string, string | undefined>) {
         customers: raw.GOOGLE_CUSTOMER_SHEET,
         inquiries: raw.GOOGLE_INQUIRY_SHEET,
         events: raw.GOOGLE_EVENT_SHEET,
-        callbacks: raw.GOOGLE_CALLBACK_SHEET,
       },
     },
-    calendly: {
-      storeVisitUrl: raw.CALENDLY_STORE_VISIT_URL,
-      videoConsultationUrl: raw.CALENDLY_VIDEO_URL,
-      captureBookings: raw.CALENDLY_CAPTURE_BOOKINGS === "true",
-    },
-    whatsapp: {
-      number: raw.WHATSAPP_NUMBER,
-      messageTemplate: raw.WHATSAPP_MESSAGE_TEMPLATE,
-    },
     assistedSupportUrl: raw.ASSISTED_SUPPORT_URL,
+    rateLimit: {
+      upstashUrl: raw.UPSTASH_REDIS_REST_URL,
+      upstashToken: raw.UPSTASH_REDIS_REST_TOKEN,
+    },
   } as const;
 }
 
 export function serverEnv() {
   return parseServerEnv(process.env);
-}
-
-/**
- * Experience defaults applied when a Product Master row leaves a field blank.
- * Product/campaign values always win over these global fallbacks.
- */
-export function experienceDefaults(env: ServerEnv = serverEnv()) {
-  return {
-    calendly: {
-      storeVisitUrl: env.calendly.storeVisitUrl,
-      videoConsultationUrl: env.calendly.videoConsultationUrl,
-    },
-    whatsapp: {
-      number: env.whatsapp.number,
-      messageTemplate: env.whatsapp.messageTemplate,
-    },
-  };
 }
 
 export function publicEnv() {
@@ -109,6 +86,6 @@ export function publicEnv() {
     appUrl: env.appUrl,
     landingPageVersion: env.landingPageVersion,
     isPreview: env.dataProvider === "preview",
-    captureBookings: env.calendly.captureBookings,
+    ...env.public,
   };
 }
