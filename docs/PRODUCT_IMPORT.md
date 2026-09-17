@@ -1,43 +1,48 @@
-# Product_Master Attribution Import and Migration
+# Products and Reel_Product_Map
 
-Product_Master is a flat attribution/mapping tab, not a product catalogue.
+Both tabs are attribution data, not a customer-facing catalogue. Nothing in
+them is displayed on the landing page.
 
-## Canonical headers
+## `Products` — one row per product
 
 | Column | Required | Purpose |
 | --- | --- | --- |
-| `product_id` | Yes | Canonical product attribution identifier |
+| `product_id` | Yes | Canonical product identifier (the `product` URL parameter) |
 | `product_name` | Yes | Internal reporting name copied to Inquiries |
-| `reel_id` | Yes | Originating Reel |
-| `campaign_id` | Yes | Originating campaign |
-| `product_position` | Recommended | One-based position for ManyChat administration |
-| `active_status` | Yes | `TRUE`, `yes`, `1`, or `active` enables the tuple |
+| `reel_id` | No* | Reel the product was first posted in |
+| `campaign_id` | No* | Campaign the product was first posted in |
+| `product_position` | No | Fallback position if the map row has none |
+| `active_status` | Recommended | `FALSE` switches the product off in every Reel |
 | `category` | No | Internal reporting field |
 | `collection` | No | Internal reporting field |
 | `campaign_name` | No | Internal reporting label |
 
-One row represents one authoritative `product_id + reel_id + campaign_id`
-tuple. Repeating a product across Reels or campaigns requires separate rows.
+\* Required only in flat mode (`GOOGLE_REEL_MAP_SHEET` empty).
 
-## Manual migration
+## `Reel_Product_Map` — one row per product per Reel/campaign
 
-The application never changes the spreadsheet schema automatically.
+| Column | Required | Purpose |
+| --- | --- | --- |
+| `reel_id` | Yes | Reel the customer came from |
+| `campaign_id` | Yes | Campaign the customer came from |
+| `product_position` | Recommended | 1-based position in the Reel ("second one" → 2) |
+| `product_id` | Yes | Must exist in `Products` |
+| `active_status` | Yes | `TRUE`, `yes`, `1` or `active` enables this link |
 
-1. Back up the spreadsheet and export every existing tab.
-2. Create or revise `Product_Master` using the canonical headers above.
-3. For a prior single-tab catalogue, copy only attribution/reporting fields.
-4. For an unfinished `Products` plus `Reel_Product_Map` split, create one flat
-   row per mapping and copy the matching internal `product_name`.
-5. Do not copy image, specification, price, offer-expiry, appointment,
-   messaging, or CTA configuration fields.
-6. Preserve Customers, Inquiries, Events, and all historical rows.
-7. Add `product_name` to Inquiries if internal reporting needs it. Existing
-   rows may remain blank; new accepted inquiries populate it from the validated
-   mapping.
-8. Archive the historical `Callback_Requests` tab if desired; do not destroy it.
-9. Validate single-product and multi-product URLs in a non-production
-   environment before switching production configuration.
+A customer link `/instagram?product=P&reel=R&campaign=C` resolves only when a
+map row matches `P + R + C` exactly and `P` exists in `Products`. The link is
+active only if the map row is active and the product is not switched off.
 
-Use [product-master-template.csv](product-master-template.csv) as the header
-template. Do not import it using "Replace spreadsheet" because that would
-destroy operational tabs.
+To reuse a product in a new Reel, add a map row; do not duplicate the product.
+
+## Rules
+
+- The application never changes the spreadsheet schema.
+- Columns are matched by header name, so order does not matter, but names must
+  match exactly.
+- Do not add image, specification, price, appointment or messaging columns;
+  they are ignored.
+- Keep Customers, Inquiries and Events history. Never insert or delete a column
+  in Inquiries without shifting the existing rows with it, or old rows will be
+  read under the wrong headers.
+- Test a link in a non-production environment before sharing it in ManyChat.

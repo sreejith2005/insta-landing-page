@@ -49,7 +49,7 @@ http://localhost:3000/instagram?product=MKBR639&reel=R123&campaign=RAKHI26&sourc
 - `lib/providers/preview-repository.ts` is development/test storage.
 - `lib/providers/google-sheets-repository.ts` is production storage.
 
-Product_Master fields never enter the customer-facing component tree. The lead
+Product and map fields never enter the customer-facing component tree. The lead
 API success response contains only `inquiryId`, `customerId`, and
 `isRepeatCustomer`.
 
@@ -57,7 +57,7 @@ API success response contains only `inquiryId`, `customerId`, and
 
 Required parameters:
 
-- `product`: canonical Product_Master `product_id`
+- `product`: canonical `Products.product_id`
 - `reel`: originating `reel_id`
 - `campaign`: originating `campaign_id`
 
@@ -76,7 +76,9 @@ Share one spreadsheet with the least-privilege service account. Reads and
 writes are header-indexed, so columns may be reordered, but their names must
 match exactly.
 
-### `Product_Master`
+### `Products` and `Reel_Product_Map`
+
+`Products` (tab name from `GOOGLE_PRODUCT_SHEET`) holds one row per product:
 
 ```text
 product_id
@@ -90,10 +92,28 @@ collection
 campaign_name
 ```
 
-The first six columns are the operational mapping. `category`, `collection`,
-and `campaign_name` are optional reporting fields. One row represents one
-product/Reel/campaign tuple. `product_name` is stored on accepted inquiries for
-internal reporting but is never displayed or returned to the browser.
+`Reel_Product_Map` (tab name from `GOOGLE_REEL_MAP_SHEET`) decides which
+product/Reel/campaign links are valid:
+
+```text
+reel_id
+campaign_id
+product_position
+product_id
+active_status
+```
+
+A link resolves only when a map row matches the exact `product_id + reel_id +
+campaign_id` **and** that `product_id` exists in `Products`. It is active only
+when the map row is active and the product's `active_status` (if filled) is
+active. Position comes from the map row, so one product can appear in several
+Reels. `product_name`, `category`, `collection` and `campaign_name` are internal
+reporting fields copied from `Products`; they are never shown to customers.
+Blank map rows are ignored.
+
+Setting `GOOGLE_REEL_MAP_SHEET=` (empty) falls back to the flat mode, where each
+`Products` row is itself one authoritative tuple. If the configured map tab does
+not exist, the app logs a warning and uses flat mode.
 
 ### `Customers`
 
@@ -234,7 +254,7 @@ server, preventing `.env.local` production settings from contaminating tests.
 
 ## Migration and deployment
 
-- [Product_Master import and migration](docs/PRODUCT_IMPORT.md)
+- [Products / Reel_Product_Map import](docs/PRODUCT_IMPORT.md)
 - [ManyChat contract](docs/MANYCHAT.md)
 - [Production launch checklist](docs/PRODUCTION_LAUNCH.md)
 - [Next redesign inputs](docs/PHASE_2.md)

@@ -4,6 +4,7 @@ import {
   countMatchingInquiries,
   defaultHeaders,
   headerRecord,
+  productFromMap,
   productFromRow,
 } from "./google-sheets-repository";
 
@@ -136,5 +137,63 @@ describe("countMatchingInquiries", () => {
         since: "2026-09-01T00:00:00.000Z",
       }),
     ).toBe(0);
+  });
+});
+
+describe("Reel_Product_Map resolution", () => {
+  const products = [
+    {
+      product_id: "MKTEST001",
+      product_name: "Test Bracelet",
+      reel_id: "REEL001",
+      campaign_id: "TESTCAMPAIGN",
+      product_position: "1",
+      active_status: "TRUE",
+      category: "Bracelet",
+      collection: "Test Collection",
+      campaign_name: "Test Campaign",
+    },
+  ];
+  const map = [
+    { reel_id: "REEL001", campaign_id: "TESTCAMPAIGN", product_position: "1", product_id: "MKTEST001", active_status: "TRUE" },
+    { reel_id: "REEL002", campaign_id: "DIWALI26", product_position: "3", product_id: "MKTEST001", active_status: "TRUE" },
+    { reel_id: "REEL003", campaign_id: "DIWALI26", product_position: "1", product_id: "MKTEST001", active_status: "FALSE" },
+    { reel_id: "", campaign_id: "", product_position: "", product_id: "", active_status: "  " },
+  ];
+
+  it("joins the exact mapping row with the product's attribution fields", () => {
+    expect(productFromMap(products, map, { productId: "MKTEST001", reelId: "REEL001", campaignId: "TESTCAMPAIGN" })).toEqual({
+      productId: "MKTEST001",
+      productName: "Test Bracelet",
+      reelId: "REEL001",
+      campaignId: "TESTCAMPAIGN",
+      productPosition: 1,
+      active: true,
+      category: "Bracelet",
+      collection: "Test Collection",
+      campaignName: "Test Campaign",
+    });
+  });
+
+  it("lets one product appear in several Reels with each mapping's own position", () => {
+    const record = productFromMap(products, map, { productId: "MKTEST001", reelId: "REEL002", campaignId: "DIWALI26" });
+    expect(record).toMatchObject({ reelId: "REEL002", campaignId: "DIWALI26", productPosition: 3, active: true });
+  });
+
+  it("does not resolve unmapped tuples, tampered products, or products missing from Products", () => {
+    expect(productFromMap(products, map, { productId: "MKTEST001", reelId: "REEL001", campaignId: "DIWALI26" })).toBeNull();
+    expect(productFromMap(products, map, { productId: "OTHER", reelId: "REEL001", campaignId: "TESTCAMPAIGN" })).toBeNull();
+    expect(productFromMap([], map, { productId: "MKTEST001", reelId: "REEL001", campaignId: "TESTCAMPAIGN" })).toBeNull();
+    expect(productFromMap(products, map, { productId: "", reelId: "", campaignId: "" })).toBeNull();
+  });
+
+  it("is inactive when either the mapping or the product is switched off", () => {
+    expect(productFromMap(products, map, { productId: "MKTEST001", reelId: "REEL003", campaignId: "DIWALI26" })?.active).toBe(false);
+    const inactiveProduct = [{ ...products[0], active_status: "FALSE" }];
+    expect(productFromMap(inactiveProduct, map, { productId: "MKTEST001", reelId: "REEL001", campaignId: "TESTCAMPAIGN" })?.active).toBe(false);
+  });
+
+  it("documents the map tab's canonical headers", () => {
+    expect(defaultHeaders.reelMap).toEqual(["reel_id", "campaign_id", "product_position", "product_id", "active_status"]);
   });
 });

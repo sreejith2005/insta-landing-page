@@ -3,7 +3,7 @@
 No step in this document is performed automatically by the repository refactor.
 
 1. Back up the Google spreadsheet.
-2. Complete the flat Product_Master migration in `docs/PRODUCT_IMPORT.md`.
+2. Populate `Products` and `Reel_Product_Map` as described in `docs/PRODUCT_IMPORT.md`.
 3. Confirm Customers, Inquiries, and Events use the documented headers.
 4. Share the spreadsheet only with the least-privilege service account.
 5. Set production Google credentials and `DATA_PROVIDER=google-sheets`.

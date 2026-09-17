@@ -43,7 +43,9 @@ const rawSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().trim().optional(),
   GOOGLE_PRIVATE_KEY: z.string().optional(),
   GOOGLE_SPREADSHEET_ID: z.string().trim().optional(),
-  GOOGLE_PRODUCT_SHEET: z.string().trim().default("Product_Master"),
+  GOOGLE_PRODUCT_SHEET: z.string().trim().default("Products"),
+  /** Reel/campaign → product mapping tab. Set to an empty value to use the flat product tab alone. */
+  GOOGLE_REEL_MAP_SHEET: z.string().trim().default("Reel_Product_Map"),
   GOOGLE_CUSTOMER_SHEET: z.string().trim().default("Customers"),
   GOOGLE_INQUIRY_SHEET: z.string().trim().default("Inquiries"),
   GOOGLE_EVENT_SHEET: z.string().trim().default("Events"),
@@ -86,6 +88,7 @@ export function parseServerEnv(input: Record<string, string | undefined>) {
       spreadsheetId: raw.GOOGLE_SPREADSHEET_ID,
       sheets: {
         products: raw.GOOGLE_PRODUCT_SHEET,
+        reelMap: raw.GOOGLE_REEL_MAP_SHEET || undefined,
         customers: raw.GOOGLE_CUSTOMER_SHEET,
         inquiries: raw.GOOGLE_INQUIRY_SHEET,
         events: raw.GOOGLE_EVENT_SHEET,

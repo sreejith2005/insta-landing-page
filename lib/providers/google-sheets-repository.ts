@@ -22,6 +22,7 @@ export const defaultHeaders = {
     "collection",
     "campaign_name",
   ],
+  reelMap: ["reel_id", "campaign_id", "product_position", "product_id", "active_status"],
   customers: [
     "customer_id",
     "created_at",
@@ -101,6 +102,47 @@ export function productFromRow(row: Row): ProductRecord | null {
   };
 }
 
+const trimmed = (value: string | undefined) => (value ?? "").trim();
+
+/**
+ * Resolves a context through the Reel_Product_Map tab: the exact
+ * reel/campaign/product row decides whether the mapping exists and is active,
+ * and the Products tab supplies the attribution fields for that product_id.
+ * A mapping whose product is missing from Products does not resolve.
+ */
+export function productFromMap(
+  productRows: Row[],
+  mapRows: Row[],
+  context: ProductMapping,
+): ProductRecord | null {
+  const mapping = mapRows.find(
+    (row) =>
+      trimmed(row.product_id) === context.productId &&
+      trimmed(row.reel_id) === context.reelId &&
+      trimmed(row.campaign_id) === context.campaignId,
+  );
+  if (!mapping) return null;
+
+  const candidates = productRows.filter((row) => trimmed(row.product_id) === context.productId);
+  const product =
+    candidates.find(
+      (row) => trimmed(row.reel_id) === context.reelId && trimmed(row.campaign_id) === context.campaignId,
+    ) ?? candidates[0];
+  if (!product) return null;
+
+  const record = productFromRow({
+    ...product,
+    reel_id: context.reelId,
+    campaign_id: context.campaignId,
+    product_position: trimmed(mapping.product_position) || product.product_position || "",
+  });
+  if (!record) return null;
+
+  // Both switches must be on: the Reel mapping and, when filled in, the product itself.
+  const productActive = trimmed(product.active_status) ? boolean(product.active_status) : true;
+  return { ...record, active: boolean(mapping.active_status) && productActive };
+}
+
 export function countMatchingInquiries(
   rows: Row[],
   filter: InquiryCountFilter,
@@ -124,7 +166,8 @@ export class GoogleSheetsRepository implements FunnelRepository {
   private readonly tabs: ServerEnv["google"]["sheets"];
   private readonly headerCache = new Map<string, string[]>();
   private readonly productCacheTtlMs = 90_000;
-  private productCache?: { rows: Row[]; expiresAt: number };
+  private productCache?: { rows: Row[]; mapRows: Row[] | null; expiresAt: number };
+  private mapTabUnavailable = false;
 
   constructor(config: ServerEnv["google"]) {
     if (!config.serviceAccountEmail || !config.privateKey || !config.spreadsheetId) {
@@ -160,12 +203,27 @@ export class GoogleSheetsRepository implements FunnelRepository {
     return rows.map((row) => headerRecord(normalizedHeaders, row));
   }
 
-  private async productRows() {
+  /** Reel map rows, or null when no map tab is configured or it does not exist. */
+  private async mapRows(): Promise<Row[] | null> {
+    const tab = this.tabs.reelMap;
+    if (!tab || this.mapTabUnavailable) return null;
+    try {
+      return await this.rows(tab);
+    } catch (error) {
+      // A missing tab is a 400 "Unable to parse range"; anything else is a real failure.
+      if ((error as { code?: number }).code !== 400) throw error;
+      this.mapTabUnavailable = true;
+      console.error(`Reel map tab "${tab}" not found; using the flat product tab only.`);
+      return null;
+    }
+  }
+
+  private async productData() {
     const now = Date.now();
-    if (this.productCache && this.productCache.expiresAt > now) return this.productCache.rows;
-    const rows = await this.rows(this.tabs.products);
-    this.productCache = { rows, expiresAt: now + this.productCacheTtlMs };
-    return rows;
+    if (this.productCache && this.productCache.expiresAt > now) return this.productCache;
+    const [rows, mapRows] = await Promise.all([this.rows(this.tabs.products), this.mapRows()]);
+    this.productCache = { rows, mapRows, expiresAt: now + this.productCacheTtlMs };
+    return this.productCache;
   }
 
   private async headersFor(tab: string, fallback: readonly string[]) {
@@ -189,7 +247,8 @@ export class GoogleSheetsRepository implements FunnelRepository {
   }
 
   async findByContext(context: ProductMapping) {
-    const rows = await this.productRows();
+    const { rows, mapRows } = await this.productData();
+    if (mapRows) return productFromMap(rows, mapRows, context);
     const row = rows.find(
       (candidate) =>
         candidate.product_id?.trim() === context.productId &&

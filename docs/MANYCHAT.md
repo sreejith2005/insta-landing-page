@@ -9,7 +9,7 @@ landing page begins only after ManyChat has selected a canonical product ID.
 
 | Parameter | Required | Meaning |
 | --- | --- | --- |
-| `product` | Yes | Canonical `Product_Master.product_id` |
+| `product` | Yes | Canonical `Products.product_id` |
 | `reel` | Yes | Originating `reel_id` |
 | `campaign` | Yes | Originating `campaign_id` |
 | `source` | No | `instagram`, `manychat`, `whatsapp`, or `direct` |
@@ -28,10 +28,11 @@ values are bounded and validated before persistence.
 /instagram?product=MK001&reel=R101&campaign=RAKHI26&source=manychat
 ```
 
-Required active Product_Master row:
+Required active `Reel_Product_Map` row (and `MK001` present in `Products`):
 
 ```text
-MK001 | Internal reporting name | R101 | RAKHI26 | 1 | TRUE
+reel_id | campaign_id | product_position | product_id | active_status
+R101    | RAKHI26     | 1                | MK001      | TRUE
 ```
 
 ## Multi-product example
@@ -42,13 +43,13 @@ If the customer says "second one", ManyChat resolves that phrase to `MK002`.
 /instagram?product=MK002&reel=R101&campaign=RAKHI26&source=manychat&utm_content=position_2
 ```
 
-Relevant Product_Master rows:
+Relevant `Reel_Product_Map` rows (each `product_id` must exist in `Products`):
 
-| product_id | product_name | reel_id | campaign_id | product_position | active_status |
-| --- | --- | --- | --- | --- | --- |
-| `MK001` | Internal name 1 | `R101` | `RAKHI26` | `1` | `TRUE` |
-| `MK002` | Internal name 2 | `R101` | `RAKHI26` | `2` | `TRUE` |
-| `MK003` | Internal name 3 | `R101` | `RAKHI26` | `3` | `TRUE` |
+| reel_id | campaign_id | product_position | product_id | active_status |
+| --- | --- | --- | --- | --- |
+| `R101` | `RAKHI26` | `1` | `MK001` | `TRUE` |
+| `R101` | `RAKHI26` | `2` | `MK002` | `TRUE` |
+| `R101` | `RAKHI26` | `3` | `MK003` | `TRUE` |
 
 The website records `MK002`. It does not interpret "second one" and does not
 display `MK002` or its internal name.

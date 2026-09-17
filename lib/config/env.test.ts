@@ -30,6 +30,13 @@ describe("parseServerEnv", () => {
     ).toThrow(/Google Sheets configuration/i);
   });
 
+  it("defaults to the Products and Reel_Product_Map tabs, and an empty map name disables the map", () => {
+    const parsed = parseServerEnv({ ...base, NODE_ENV: "test" });
+    expect(parsed.google.sheets.products).toBe("Products");
+    expect(parsed.google.sheets.reelMap).toBe("Reel_Product_Map");
+    expect(parseServerEnv({ ...base, NODE_ENV: "test", GOOGLE_REEL_MAP_SHEET: "" }).google.sheets.reelMap).toBeUndefined();
+  });
+
   it("uses one flat Product_Master tab and accepts blank optional public URLs", () => {
     // A platform env-var UI (or a blank .env line) commonly stores "" rather
     // than omitting the key entirely; this must not crash env parsing.
