@@ -27,7 +27,7 @@ describe("LeadForm", () => {
     expect(screen.getByLabelText("Full Name")).toHaveAttribute("autocomplete", "name");
     expect(screen.getByLabelText("Mobile Number")).toHaveAttribute("inputmode", "tel");
     expect(screen.getByLabelText("PIN Code")).toHaveAttribute("inputmode", "numeric");
-    expect(screen.getByRole("button", { name: "Unlock my offer" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Unlock My 30% Benefit" })).toBeEnabled();
   });
 
   it("keeps the honeypot out of the accessibility tree and tab order", () => {
@@ -44,7 +44,7 @@ describe("LeadForm", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     render(<LeadForm context={context} onAccepted={() => undefined} />);
-    await userEvent.click(screen.getByRole("button", { name: "Unlock my offer" }));
+    await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
     expect(await screen.findByText("Enter your full name.")).toBeVisible();
     expect(fetchSpy.mock.calls.filter(([url]) => url === "/api/lead")).toHaveLength(0);
   });
@@ -66,7 +66,7 @@ describe("LeadForm", () => {
       />,
     );
     await fillValidLead();
-    await userEvent.click(screen.getByRole("button", { name: "Unlock my offer" }));
+    await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
 
     await waitFor(() =>
       expect(fetchSpy.mock.calls.filter(([url]) => url === "/api/lead")).toHaveLength(1),
@@ -97,7 +97,7 @@ describe("LeadForm", () => {
     const accepted = vi.fn();
     render(<LeadForm context={context} onAccepted={accepted} />);
     await fillValidLead();
-    await userEvent.click(screen.getByRole("button", { name: "Unlock my offer" }));
+    await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
     expect(screen.getByRole("button", { name: "Saving your details" })).toBeDisabled();
     expect(fetchSpy.mock.calls.filter(([url]) => url === "/api/lead")).toHaveLength(1);
     resolveRequest(
@@ -111,7 +111,13 @@ describe("LeadForm", () => {
         { status: 201, headers: { "Content-Type": "application/json" } },
       ),
     );
-    await waitFor(() => expect(accepted).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(accepted).toHaveBeenCalledWith(
+        expect.objectContaining({ inquiryId: "inq_1", isRepeatCustomer: false }),
+        expect.any(String),
+        "Ananya Shah",
+      ),
+    );
   });
 
   it("retains values and withholds confirmation after a server failure", async () => {
@@ -127,7 +133,7 @@ describe("LeadForm", () => {
     const accepted = vi.fn();
     render(<LeadForm context={context} onAccepted={accepted} />);
     await fillValidLead();
-    await userEvent.click(screen.getByRole("button", { name: "Unlock my offer" }));
+    await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("could not save");
     expect(screen.getByLabelText("Full Name")).toHaveValue("Ananya Shah");
     expect(accepted).not.toHaveBeenCalled();

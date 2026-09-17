@@ -56,4 +56,54 @@ describe("parseServerEnv", () => {
       }),
     ).toThrow(/https/i);
   });
+
+  it("accepts a self-hosted /public brand video path", () => {
+    const parsed = parseServerEnv({
+      ...base,
+      NODE_ENV: "test",
+      DATA_PROVIDER: "preview",
+      NEXT_PUBLIC_BRAND_VIDEO_URL: "/brand/mk-jewels-brand-film.mp4",
+    });
+    expect(parsed.public.brandVideoUrl).toBe("/brand/mk-jewels-brand-film.mp4");
+    expect(() =>
+      parseServerEnv({ ...base, NODE_ENV: "test", NEXT_PUBLIC_BRAND_VIDEO_URL: "//evil.example/a.mp4" }),
+    ).toThrow();
+  });
+
+  it("never enables development social proof in production, even when requested", () => {
+    const parsed = parseServerEnv({
+      ...base,
+      NODE_ENV: "production",
+      DATA_PROVIDER: "google-sheets",
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: "svc@example.iam.gserviceaccount.com",
+      GOOGLE_PRIVATE_KEY: "key",
+      GOOGLE_SPREADSHEET_ID: "sheet",
+      SHOW_DEVELOPMENT_SOCIAL_PROOF: "true",
+    });
+    expect(parsed.showDevelopmentSocialProof).toBe(false);
+  });
+
+  it("enables development social proof by default only in development", () => {
+    expect(parseServerEnv({ ...base, NODE_ENV: "development" }).showDevelopmentSocialProof).toBe(true);
+    expect(
+      parseServerEnv({ ...base, NODE_ENV: "development", SHOW_DEVELOPMENT_SOCIAL_PROOF: "false" })
+        .showDevelopmentSocialProof,
+    ).toBe(false);
+    expect(parseServerEnv({ ...base, NODE_ENV: "test" }).showDevelopmentSocialProof).toBe(false);
+  });
+
+  it("parses inquiry count settings and allows LIVE only in recent mode", () => {
+    const total = parseServerEnv({ ...base, NODE_ENV: "test", INQUIRY_COUNT_SHOW_LIVE: "true" });
+    expect(total.inquiryCount).toMatchObject({ enabled: true, mode: "total", allowLiveLabel: false, minimumCount: 1 });
+    const recent = parseServerEnv({
+      ...base,
+      NODE_ENV: "test",
+      SHOW_INQUIRY_COUNT: "true",
+      INQUIRY_COUNT_MODE: "recent",
+      INQUIRY_COUNT_RECENT_HOURS: "48",
+      INQUIRY_COUNT_SHOW_LIVE: "true",
+    });
+    expect(recent.inquiryCount).toMatchObject({ mode: "recent", recentWindowHours: 48, allowLiveLabel: true });
+    expect(parseServerEnv({ ...base, NODE_ENV: "test", SHOW_INQUIRY_COUNT: "false" }).inquiryCount.enabled).toBe(false);
+  });
 });

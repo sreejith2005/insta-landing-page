@@ -5,9 +5,16 @@ import { after } from "next/server";
 import { BrandHeader } from "@/components/brand/BrandHeader";
 import { ContextState } from "@/components/landing/ContextState";
 import { FunnelExperience } from "@/components/landing/FunnelExperience";
+import { AnnouncementBar } from "@/components/landing/AnnouncementBar";
+import { inquiryProofConfig } from "@/config/experience";
+import { socialProof } from "@/config/social-proof";
+import { DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF } from "@/config/social-proof.development";
 import { publicEnv, serverEnv } from "@/lib/config/env";
+import { resolveBrandVideo } from "@/lib/media/brand-video";
 import { repository } from "@/lib/providers/repository";
 import { resolveProductContext } from "@/lib/products/resolve-product";
+import { loadInquiryProof } from "@/lib/social-proof/inquiry-proof";
+import { resolveSocialProof } from "@/lib/social-proof/resolve-social-proof";
 import { incomingContextSchema } from "@/lib/validation/schemas";
 
 type Search = Record<string, string | string[] | undefined>;
@@ -36,8 +43,10 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
 
   const runtime = publicEnv();
   let resolved;
+  let dataRepository: Awaited<ReturnType<typeof repository>>;
   try {
-    resolved = await resolveProductContext(parsed.data, await repository());
+    dataRepository = await repository();
+    resolved = await resolveProductContext(parsed.data, dataRepository);
   } catch (error) {
     console.error("Product context resolution failed:", error);
     return <ContextState status="invalid" supportUrl={supportUrl} />;
@@ -58,7 +67,7 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
             landingPageVersion: runtime.landingPageVersion,
             metadata: { reason: status },
           },
-          await repository(),
+          dataRepository,
         );
       } catch {
         console.error("Context failure event write failed");
@@ -67,8 +76,17 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
     return <ContextState status={status} supportUrl={supportUrl} />;
   }
 
+  // Server-side only: the customer receives a formatted count, never the
+  // product/Reel/campaign filter used to compute it.
+  const inquiryProof = await loadInquiryProof(
+    { ...inquiryProofConfig, ...env.inquiryCount },
+    dataRepository,
+    parsed.data,
+  );
+
   return (
     <div className="shell">
+      <AnnouncementBar />
       <BrandHeader preview={runtime.isPreview} />
       <FunnelExperience
         context={parsed.data}
@@ -76,6 +94,15 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
           landingPageVersion: runtime.landingPageVersion,
           offerUnlockedCopy: runtime.offerUnlockedCopy,
           representativeContactCopy: runtime.representativeContactCopy,
+          brandVideo: resolveBrandVideo(runtime.brandVideoUrl),
+          inquiryProof,
+          // Placeholders are resolved here, on the server, and refused in production.
+          socialProof: resolveSocialProof(
+            socialProof,
+            DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF,
+            env.showDevelopmentSocialProof,
+            env.nodeEnv,
+          ),
         }}
       />
     </div>

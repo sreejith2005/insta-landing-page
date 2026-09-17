@@ -16,7 +16,7 @@ Instagram Reel
   -> ManyChat resolves the requested product
   -> /instagram receives product + reel + campaign
   -> server validates the exact active tuple
-  -> customer submits name, mobile, PIN code, and city
+  -> customer unlocks the approved offer and submits name, mobile, PIN code, and city
   -> customer and inquiry are stored
   -> generic offer/contact confirmation is shown
 ```
@@ -161,10 +161,33 @@ customer name, mobile number, PIN code, or city.
 
 ## Truthful inquiry counts
 
-The repository provides `countInquiriesForContext({ productId, reelId?,
-campaignId?, since? })`. It counts real stored inquiries matching every
-supplied filter. This phase exposes no public count endpoint and renders no
-counter.
+The hero pill shows real accepted inquiries for the validated
+`product_id + reel_id + campaign_id`, read on the server through
+`countInquiriesForContext`. It is configured with environment variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `SHOW_INQUIRY_COUNT` | `true` | Show the pill at all |
+| `INQUIRY_COUNT_MODE` | `total` | `total`: all accepted inquiries. `recent`: only the last `INQUIRY_COUNT_RECENT_HOURS` |
+| `INQUIRY_COUNT_RECENT_HOURS` | `24` | Window for recent mode |
+| `INQUIRY_COUNT_SHOW_LIVE` | `false` | In recent mode only, label as "X customers enquiring ● LIVE" |
+| `INQUIRY_COUNT_MINIMUM` | `1` | Hide counts below this. Zero is always hidden |
+
+Total mode reads "X enquiries received for this selection"; recent mode without
+LIVE reads "X enquiries in the last N hours". Failed or slow (>1.2 s) lookups
+hide the pill, and results are cached for 60 s per selection. There is no public
+count endpoint and no random fallback. This dynamic count is deliberately
+separate from the static, approved trust metrics.
+
+## Landing page content
+
+Approved trust metrics, Google reviews, testimonials and media live in
+`config/social-proof.ts` and start empty; empty sections are removed in
+production. Clearly labelled development placeholders
+(`config/social-proof.development.ts`) fill empty sections in `next dev`
+(`SHOW_DEVELOPMENT_SOCIAL_PROOF=false` turns them off) and can never render when
+`NODE_ENV=production`. The brand film lives at `public/brand/mk-jewels-intro.mp4`.
+See `docs/CONTENT_ASSETS.md`.
 
 ## Security and reliability
 
@@ -190,9 +213,10 @@ See `.env.example`. Production requires:
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
-The four tab-name variables have safe defaults. Confirmation copy and the
-future brand-video URL are public presentation configuration. The video URL is
-validated but not rendered in this phase.
+The four tab-name variables have safe defaults. Offer/success copy, inquiry
+visibility, and approved trust metrics live in typed presentation
+configuration. The optional public brand-video URL is HTTPS-validated and
+supports hosted MP4, YouTube, or Vimeo.
 
 ## Verification
 

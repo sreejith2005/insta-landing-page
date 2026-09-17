@@ -6,8 +6,10 @@ const url = "/instagram?product=MKBR639&reel=R123&campaign=RAKHI26";
 const viewports = [
   { width: 320, height: 568 },
   { width: 360, height: 800 },
+  { width: 375, height: 812 },
   { width: 390, height: 844 },
   { width: 412, height: 915 },
+  { width: 430, height: 932 },
   { width: 844, height: 390 },
   { width: 768, height: 1024 },
   { width: 1440, height: 1000 },
@@ -25,20 +27,22 @@ async function noOverflow(page: Page, label: string) {
 for (const viewport of viewports) {
   const size = `${viewport.width}x${viewport.height}`;
 
-  test(`temporary form and confirmation do not overflow at ${size}`, async ({ page }) => {
+  test(`landing page and confirmation do not overflow at ${size}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     const address = randomUUID().replaceAll("-", "").match(/.{4}/g)?.join(":");
     await page.setExtraHTTPHeaders({ "x-forwarded-for": address ?? randomUUID() });
     await page.goto(url);
     await noOverflow(page, `form at ${size}`);
-    await expect(page.getByRole("button", { name: "Unlock my offer" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Unlock My 30% Benefit" })).toBeVisible();
 
+    // A person cannot finish the form within the server's 150 ms bot-timing guard.
+    await page.waitForTimeout(300);
     await page.getByLabel("Full Name").fill("Ananya Shah");
     await page.getByLabel("Mobile Number").fill(String(nextPhone++));
     await page.getByLabel("PIN Code").fill("400001");
     await page.getByLabel("City").fill("Navi Mumbai");
-    await page.getByRole("button", { name: "Unlock my offer" }).click();
-    await expect(page.getByRole("heading", { name: /offer has been unlocked/i })).toBeVisible();
+    await page.getByRole("button", { name: "Unlock My 30% Benefit" }).click();
+    await expect(page.getByRole("heading", { name: /benefit is unlocked/i })).toBeVisible();
     await noOverflow(page, `confirmation at ${size}`);
 
     const overflowing = await page.evaluate(() => {

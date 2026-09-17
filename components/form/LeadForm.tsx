@@ -12,14 +12,22 @@ import { LeadField } from "./LeadField";
 type Props = {
   context: IncomingInstagramContext;
   landingPageVersion?: string;
-  onAccepted: (accepted: AcceptedInquiry, sessionId: string) => void;
+  ctaText?: string;
+  privacyText?: string;
+  onAccepted: (accepted: AcceptedInquiry, sessionId: string, fullName: string) => void;
 };
 
 const initialFields: LeadFields = { fullName: "", mobileNumber: "", pinCode: "", city: "" };
 
 const GENERIC_FAILURE = "We could not save your details. Please try again.";
 
-export function LeadForm({ context, landingPageVersion = "phase1", onAccepted }: Props) {
+export function LeadForm({
+  context,
+  landingPageVersion = "phase1",
+  ctaText = experienceCopy.offerCtaText,
+  privacyText = experienceCopy.privacy,
+  onAccepted,
+}: Props) {
   const [fields, setFields] = useState(initialFields);
   const [errors, setErrors] = useState<Partial<Record<keyof LeadFields, string>>>({});
   const [status, setStatus] = useState<"idle" | "submitting">("idle");
@@ -97,7 +105,7 @@ export function LeadForm({ context, landingPageVersion = "phase1", onAccepted }:
         );
         return;
       }
-      onAccepted(result as AcceptedInquiry & { ok: true }, sessionId);
+      onAccepted(result as AcceptedInquiry & { ok: true }, sessionId, fields.fullName.trim());
     } catch {
       setFormError(GENERIC_FAILURE);
     } finally {
@@ -149,10 +157,13 @@ export function LeadForm({ context, landingPageVersion = "phase1", onAccepted }:
       </div>
       {formError ? <p className="form-error" role="alert">{formError}</p> : null}
       <button className="primary-button" disabled={status === "submitting"} type="submit">
-        {status === "submitting" ? "Saving your details" : experienceCopy.submit}
+        {status === "submitting" ? "Saving your details" : ctaText}
         <span aria-hidden="true">→</span>
       </button>
-      <p className="privacy-copy">{experienceCopy.privacy}</p>
+      <p className="privacy-copy">
+        <span aria-hidden="true">◇</span>
+        {privacyText}
+      </p>
     </form>
   );
 }
