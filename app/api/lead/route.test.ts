@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Never reach the real India Post API from tests.
+vi.mock("@/lib/pincode/lookup-pin-code", () => ({
+  lookupPinCode: vi.fn().mockResolvedValue({ city: "Mumbai", state: "Maharashtra" }),
+}));
 
 import { POST } from "./route";
 

@@ -5,12 +5,14 @@ import { useEffect, useRef, useState } from "react";
 import { experienceCopy, honeypotField, leadFields } from "@/config/experience";
 import { getSessionId } from "@/lib/attribution/session";
 import { trackFunnelEvent } from "@/lib/attribution/client-events";
-import { validateLeadFields } from "@/lib/validation/lead-fields";
-import type { AcceptedInquiry, IncomingInstagramContext, LeadFields } from "@/types/funnel";
+import { PIN_CODE, validateLeadFields } from "@/lib/validation/lead-fields";
+import type { AcceptedInquiry, IncomingInstagramContext, InstagramDmContext, LeadFields } from "@/types/funnel";
 import { LeadField } from "./LeadField";
 
 type Props = {
   context: IncomingInstagramContext;
+  /** Hidden lead fields carried from the ManyChat DM, never shown or edited. */
+  dm?: InstagramDmContext;
   landingPageVersion?: string;
   ctaText?: string;
   privacyText?: string;
@@ -23,6 +25,7 @@ const GENERIC_FAILURE = "We could not save your details. Please try again.";
 
 export function LeadForm({
   context,
+  dm,
   landingPageVersion = "phase1",
   ctaText = experienceCopy.offerCtaText,
   privacyText = experienceCopy.privacy,
@@ -32,6 +35,8 @@ export function LeadForm({
   const [errors, setErrors] = useState<Partial<Record<keyof LeadFields, string>>>({});
   const [status, setStatus] = useState<"idle" | "submitting">("idle");
   const [formError, setFormError] = useState("");
+  /** Hidden field: the state India Post gives for the PIN. The server re-derives it. */
+  const [state, setState] = useState("");
 
   /** Applies the authoritative per-field errors returned by the server. */
   function setFieldErrorsFromServer(serverFields: unknown) {
@@ -53,13 +58,43 @@ export function LeadForm({
     mountedAt.current = Date.now();
   }, []);
 
+  // PIN → city/state autofill. Only the newest PIN's answer is applied, and a
+  // city the customer typed themselves is never overwritten.
+  const latestPin = useRef("");
+  const autofilledCity = useRef("");
+
+  async function autofillFromPin(pinCode: string) {
+    latestPin.current = pinCode;
+    setState("");
+    if (!PIN_CODE.test(pinCode)) return;
+    try {
+      const response = await fetch(`/api/pincode/${pinCode}`);
+      if (!response.ok) return;
+      const result = await response.json();
+      if (latestPin.current !== pinCode) return;
+      if (typeof result.city !== "string" || typeof result.state !== "string") return;
+      setState(result.state);
+      setFields((current) => {
+        if (current.city.trim() && current.city !== autofilledCity.current) return current;
+        autofilledCity.current = result.city;
+        return { ...current, city: result.city };
+      });
+      setErrors((current) => ({ ...current, city: undefined }));
+    } catch {
+      // Autofill is a convenience; the customer can always type the city.
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (status === "submitting") return;
     const sessionId = getSessionId();
     const payload = {
       ...fields,
+      state: state || undefined,
       ...context,
+      instagramUsername: dm?.instagramUsername,
+      dmReceivedAt: dm?.dmReceivedAt,
       sessionId,
       // Scoped to the session and the full product/Reel/campaign triple, so a
       // repeat tap cannot duplicate an inquiry while the same piece arriving
@@ -138,13 +173,14 @@ export function LeadForm({
               }
               setFields((current) => ({ ...current, [field.name]: event.target.value }));
               setErrors((current) => ({ ...current, [field.name]: undefined }));
+              if (field.name === "pinCode") void autofillFromPin(event.target.value.trim());
             }}
           />
         ))}
       </div>
       {/* Honeypot: removed from the tab order and the accessibility tree. */}
       <div className="honeypot" aria-hidden="true">
-        <label htmlFor={honeypotField}>Company</label>
+        <label htmlFor={honeypotField}>Leave this field empty</label>
         <input
           ref={honeypot}
           id={honeypotField}
@@ -152,6 +188,9 @@ export function LeadForm({
           type="text"
           tabIndex={-1}
           autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-form-type="other"
           defaultValue=""
         />
       </div>

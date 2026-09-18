@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF } from "@/config/social-proof.development";
-import type { SocialProofContent } from "@/config/social-proof";
+import { socialProof, type SocialProofContent } from "@/config/social-proof";
 import { resolveSocialProof } from "@/lib/social-proof/resolve-social-proof";
 import type { IncomingInstagramContext } from "@/types/funnel";
 import { FunnelExperience } from "./FunnelExperience";
@@ -41,61 +42,62 @@ const empty: SocialProofContent = {
 };
 
 const film = { kind: "file" as const, src: "/brand/mk-jewels-intro.mp4", poster: "/brand/video-poster.jpg", title: "A look inside MK Jewels", aspectRatio: "16 / 9" };
+const secondFilm = { kind: "file" as const, src: "/brand/mk-jewels-second-film.mp4", title: "MK Jewels high jewellery", aspectRatio: "16 / 9" };
 
 describe("FunnelExperience", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
+    // jsdom has no media playback.
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
-  it("renders the hero, offer and real enquiry proof without exposing attribution", () => {
-    render(
-      <FunnelExperience
-        context={context}
-        runtime={{
-          landingPageVersion: "rich-v3",
-          inquiryProof: { count: 327, live: false, label: "327 enquiries received for this selection" },
-        }}
-      />,
-    );
+  it("renders the hero and offer without exposing attribution", () => {
+    render(<FunnelExperience context={context} runtime={{ landingPageVersion: "rich-v3" }} />);
 
     const hero = screen.getByRole("region", { name: /You found the piece/ });
-    expect(within(hero).getByText("327")).toBeVisible();
-    expect(within(hero).getByText(/enquiries received for this selection/)).toBeVisible();
     expect(within(hero).getByText("Up to 30% off on making charges")).toBeVisible();
-    expect(screen.queryByText("Live")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Unlock My 30% Benefit" })).toBeEnabled();
     expect(document.body.innerHTML).not.toMatch(/MKBR639|R123|RAKHI26/);
   });
 
-  it("shows LIVE only when the server marks the proof as a live measurement", () => {
+  it("opens with the brand film, full-width and autoplaying muted, before the hero", () => {
+    render(<FunnelExperience context={context} runtime={{ landingPageVersion: "rich-v3", brandVideo: film }} />);
+
+    const section = screen.getByRole("region", { name: film.title });
+    expect(document.querySelector("main")?.firstElementChild).toBe(section);
+    expect(section.nextElementSibling).toHaveAttribute("id", "hero");
+    const video = section.querySelector("video")!;
+    expect(video).toHaveAttribute("autoplay");
+    expect(video.muted).toBe(true);
+    expect(section.querySelector("video source")).toHaveAttribute("src", "/brand/mk-jewels-intro.mp4");
+    expect(within(section).queryByRole("button", { name: /Play video/ })).not.toBeInTheDocument();
+
+    fireEvent.click(within(section).getByRole("button", { name: "Unmute" }));
+    expect(video.muted).toBe(false);
+    fireEvent.click(within(section).getByRole("button", { name: "Mute" }));
+    expect(video.muted).toBe(true);
+  });
+
+  it("autoplays hosted films muted in the provider's player", () => {
     render(
       <FunnelExperience
         context={context}
-        runtime={{
-          landingPageVersion: "rich-v3",
-          inquiryProof: { count: 42, live: true, label: "42 customers enquiring" },
-        }}
+        runtime={{ landingPageVersion: "rich-v3", brandVideo: { ...film, kind: "youtube", src: "abcdefghijk" } }}
       />,
     );
-    expect(screen.getByText("Live")).toBeVisible();
-    expect(screen.getByText(/customers enquiring/)).toBeVisible();
+    const frame = screen.getByTitle(film.title);
+    expect(frame.getAttribute("src")).toMatch(/^https:\/\/www\.youtube-nocookie\.com\/embed\/abcdefghijk\?.*autoplay=1&mute=1/);
   });
 
-  it("renders a large brand-film section right after the hero, loading the file only on play", () => {
-    render(<FunnelExperience context={context} runtime={{ landingPageVersion: "rich-v3", brandVideo: film }} />);
-
-    const section = screen.getByRole("region", { name: /Crafted with care/ });
-    expect(section.previousElementSibling).toHaveAttribute("id", "hero");
-    expect(section.querySelector("video")).toBeNull();
-    fireEvent.click(within(section).getByRole("button", { name: /Play video/ }));
-    expect(section.querySelector("video source")).toHaveAttribute("src", "/brand/mk-jewels-intro.mp4");
-  });
-
-  it("hides the film section cleanly when no film is configured", () => {
+  it("hides the film cleanly when no film is configured", () => {
     render(<FunnelExperience context={context} runtime={{ landingPageVersion: "rich-v3" }} />);
-    expect(screen.queryByRole("region", { name: /Crafted with care/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Play video/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: film.title })).not.toBeInTheDocument();
+    expect(document.querySelector("video, iframe")).toBeNull();
   });
 
   it("renders exactly one lead form and points every call to action at it", () => {
@@ -105,6 +107,7 @@ describe("FunnelExperience", () => {
         runtime={{
           landingPageVersion: "rich-v3",
           brandVideo: film,
+          secondVideo: secondFilm,
           socialProof: resolveSocialProof(approved, empty, false, "production"),
         }}
       />,
@@ -133,7 +136,6 @@ describe("FunnelExperience", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Since 1999")).toBeVisible();
     expect(screen.getByRole("heading", { name: /Trusted by jewellery buyers/ })).toBeVisible();
     expect(screen.getByText("4.8")).toBeVisible();
     expect(screen.getByText("1,234 reviews on Google")).toBeVisible();
@@ -167,9 +169,128 @@ describe("FunnelExperience", () => {
       />,
     );
 
-    expect(screen.getAllByText(/Development placeholder · not approved for production/)).toHaveLength(3);
-    expect(screen.getByLabelText("1 Lakh+")).toBeVisible();
+    // Trust stats are labelled in the top trust bar, rendered by the page.
+    expect(screen.getAllByText(/Development placeholder · not approved for production/)).toHaveLength(2);
     expect(screen.getByRole("heading", { name: /Trusted by jewellery buyers/ })).toBeVisible();
     expect(screen.getByRole("heading", { name: /meaningful moments/ })).toBeVisible();
+  });
+
+  it("after an accepted lead, shows booking and WhatsApp options and tags their events with the inquiry", async () => {
+    const fetchSpy = vi.fn((url: string, init?: RequestInit) => {
+      void init;
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ ok: true, inquiryId: "inq_1", customerId: "cus_1", isRepeatCustomer: false }),
+          { status: url === "/api/lead" ? 201 : 202, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    vi.stubGlobal("scrollTo", vi.fn());
+    render(
+      <FunnelExperience
+        context={context}
+        runtime={{
+          landingPageVersion: "rich-v3",
+          booking: { videoUrl: "https://calendly.com/mk/video" },
+          whatsappUrl: "https://wa.me/919876543210?text=Hi%2C%20I%27m%20interested%20in%20Rose%20Bracelet%20(MKBR639)",
+        }}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText("Full Name"), "Ananya Shah");
+    await userEvent.type(screen.getByLabelText("Mobile Number"), "9876543210");
+    await userEvent.type(screen.getByLabelText("PIN Code"), "400001");
+    await userEvent.type(screen.getByLabelText("City"), "Mumbai");
+    await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Book a video call" }));
+    expect(screen.getByRole("link", { name: /Chat with us on WhatsApp/ })).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/Rose Bracelet|MKBR639/);
+
+    await waitFor(() => {
+      const opened = fetchSpy.mock.calls
+        .filter(([url]) => url === "/api/events")
+        .map(([, init]) => JSON.parse(String(init?.body)))
+        .find((body) => body.eventName === "calendly_video_call_opened");
+      expect(opened).toMatchObject({
+        inquiryId: "inq_1",
+        customerId: "cus_1",
+        productId: "MKBR639",
+        metadata: { bookingType: "video_call" },
+      });
+      expect(opened.sessionId).toMatch(/^[0-9a-f-]{36}$/);
+    });
+  });
+
+  it("places the second film, Google reviews and testimonials, in order, below the form", () => {
+    render(
+      <FunnelExperience
+        context={context}
+        runtime={{
+          landingPageVersion: "rich-v3",
+          secondVideo: secondFilm,
+          socialProof: resolveSocialProof(approved, empty, false, "production"),
+        }}
+      />,
+    );
+    const form = document.getElementById("enquire")!;
+    const video = screen.getByRole("region", { name: /Made to be noticed/ });
+    const reviews = screen.getByRole("heading", { name: /Trusted by jewellery buyers/ }).closest("section")!;
+    const stories = screen.getByRole("heading", { name: /meaningful moments/ }).closest("section")!;
+    expect(form.nextElementSibling).toBe(video);
+    expect(video.nextElementSibling).toBe(reviews);
+    expect(reviews.nextElementSibling).toBe(stories);
+    // Plays only when pressed, unlike the hero film.
+    expect(video.querySelector("video")).toBeNull();
+    expect(within(video).getByRole("button", { name: /Play video: MK Jewels high jewellery/ })).toBeVisible();
+  });
+
+  it("keeps the second film and proof below the success state, without a scroll-to-form CTA", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        Promise.resolve(
+          new Response(JSON.stringify({ ok: true, inquiryId: "inq_1", customerId: "cus_1", isRepeatCustomer: false }), {
+            status: url === "/api/lead" ? 201 : 202,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+      ),
+    );
+    vi.stubGlobal("scrollTo", vi.fn());
+    render(
+      <FunnelExperience
+        context={context}
+        runtime={{
+          landingPageVersion: "rich-v3",
+          secondVideo: secondFilm,
+          socialProof: resolveSocialProof(approved, empty, false, "production"),
+        }}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText("Full Name"), "Ananya Shah");
+    await userEvent.type(screen.getByLabelText("Mobile Number"), "9876543210");
+    await userEvent.type(screen.getByLabelText("PIN Code"), "400001");
+    await userEvent.type(screen.getByLabelText("City"), "Mumbai");
+    await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
+
+    const success = (await screen.findByRole("heading", { level: 1, name: /benefit is unlocked/ })).closest("main")!;
+    const video = screen.getByRole("region", { name: /Made to be noticed/ });
+    expect(success.nextElementSibling).toBe(video);
+    expect(screen.getByRole("heading", { name: /Trusted by jewellery buyers/ })).toBeVisible();
+    expect(screen.getByRole("heading", { name: /meaningful moments/ })).toBeVisible();
+    expect(document.querySelector("a[data-cta]")).toBeNull();
+  });
+
+  it("renders no testimonials section while config/testimonial-videos.ts is empty in production", () => {
+    render(
+      <FunnelExperience
+        context={context}
+        runtime={{ landingPageVersion: "rich-v3", socialProof: resolveSocialProof(socialProof, DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF, true, "production") }}
+      />,
+    );
+    expect(screen.queryByRole("heading", { name: /meaningful moments/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Trusted by jewellery buyers/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /Made to be noticed/ })).not.toBeInTheDocument();
   });
 });

@@ -22,6 +22,24 @@ describe("recordEvent", () => {
     expect(repository.snapshot().events[0]?.metadata).toEqual({ reason: "inactive" });
   });
 
+  it("keeps the booking type on Calendly events", async () => {
+    const repository = new PreviewRepository();
+    await recordEvent(
+      {
+        eventName: "calendly_event_scheduled",
+        sessionId: "d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4",
+        productId: "MKBR639",
+        reelId: "R123",
+        campaignId: "RAKHI26",
+        source: "instagram",
+        landingPageVersion: "phase1",
+        metadata: { bookingType: "store_visit", email: "a@example.com" },
+      },
+      repository,
+    );
+    expect(repository.snapshot().events[0]?.metadata).toEqual({ bookingType: "store_visit" });
+  });
+
   it("preserves validated attribution on the stored event", async () => {
     const repository = new PreviewRepository();
     await recordEvent(

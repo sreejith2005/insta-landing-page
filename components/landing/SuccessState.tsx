@@ -1,17 +1,126 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { experienceCopy, successSteps } from "@/config/experience";
+import { CALENDLY_ORIGIN } from "@/lib/contact/calendly";
+import type { FunnelEventName } from "@/types/funnel";
+import { CalendlyInline } from "./CalendlyInline";
+
+export type BookingLinks = { videoUrl?: string; storeUrl?: string };
+
+export type BookingType = "video_call" | "store_visit";
+
+/** Fire-and-forget analytics for the post-enquiry actions. */
+export type TrackSuccessEvent = (eventName: FunnelEventName, metadata?: { bookingType: BookingType }) => void;
+
+const bookingActions = [
+  { type: "video_call", key: "videoUrl", label: "Book a video call", openedEvent: "calendly_video_call_opened" },
+  { type: "store_visit", key: "storeUrl", label: "Book a store visit", openedEvent: "calendly_store_visit_opened" },
+] as const;
+
+/**
+ * Calendly's postMessage events → our event names. They carry no date or time,
+ * only that a selection or booking happened.
+ */
+const calendlyMessages: Partial<Record<string, FunnelEventName>> = {
+  "calendly.date_and_time_selected": "calendly_date_time_selected",
+  "calendly.event_scheduled": "calendly_event_scheduled",
+};
+
+/**
+ * Post-enquiry next steps. Each booking button appears only when the product
+ * has that Calendly link, and reveals Calendly's inline scheduler; WhatsApp
+ * appears only when a CRM number is configured. Nothing here names the piece.
+ */
+function BookingOptions({
+  booking,
+  whatsappUrl,
+  track,
+}: {
+  booking?: BookingLinks;
+  whatsappUrl?: string;
+  track?: TrackSuccessEvent;
+}) {
+  const [open, setOpen] = useState<BookingType | null>(null);
+
+  // Only one scheduler is open at a time, so it identifies the booking type.
+  useEffect(() => {
+    if (!open || !track) return;
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== CALENDLY_ORIGIN) return;
+      const name = (event.data as { event?: unknown } | null)?.event;
+      const eventName = typeof name === "string" ? calendlyMessages[name] : undefined;
+      if (eventName && open) track?.(eventName, { bookingType: open });
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [open, track]);
+
+  const actions = bookingActions.filter((action) => booking?.[action.key]);
+  if (!actions.length && !whatsappUrl) return null;
+  const openAction = actions.find((action) => action.type === open);
+
+  return (
+    <div className="success-booking">
+      <div className="success-booking-actions">
+        {actions.map((action) => (
+          <button
+            type="button"
+            className="cta-link cta-gold"
+            key={action.type}
+            aria-expanded={open === action.type}
+            aria-controls={open === action.type ? `booking-${action.type}` : undefined}
+            onClick={() => {
+              if (open === action.type) return setOpen(null);
+              setOpen(action.type);
+              track?.(action.openedEvent, { bookingType: action.type });
+            }}
+          >
+            {action.label}
+          </button>
+        ))}
+        {whatsappUrl ? (
+          <a
+            className="cta-link cta-whatsapp"
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            // Sent with `keepalive`, so it survives the page losing focus to WhatsApp.
+            onClick={() => track?.("whatsapp_contact_clicked")}
+          >
+            Chat with us on WhatsApp
+            <span className="cta-arrow" aria-hidden="true">↗</span>
+          </a>
+        ) : null}
+      </div>
+      {openAction ? (
+        <CalendlyInline
+          key={openAction.type}
+          id={`booking-${openAction.type}`}
+          url={booking![openAction.key]!}
+          label={openAction.label}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 export function SuccessState({
   isRepeatCustomer,
   offerCopy,
   contactCopy,
   firstName,
+  booking,
+  whatsappUrl,
+  track,
 }: {
   isRepeatCustomer: boolean;
   offerCopy?: string;
   contactCopy?: string;
   firstName?: string;
+  booking?: BookingLinks;
+  /** Pre-built wa.me link; its pre-filled text is never shown on the page. */
+  whatsappUrl?: string;
+  track?: TrackSuccessEvent;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
 
@@ -36,7 +145,11 @@ export function SuccessState({
           {isRepeatCustomer ? <p className="repeat-welcome">{experienceCopy.repeatWelcome}</p> : null}
           {firstName ? <p className="thank-you">Thank you, {firstName.split(/\s+/)[0]}.</p> : null}
           <p className="success-description">{experienceCopy.successDescription}</p>
+          <p className="success-discount">
+            <span aria-hidden="true">◆</span> {experienceCopy.successDiscountApplied}
+          </p>
           <p className="success-contact">{contactCopy || experienceCopy.representativeContact}</p>
+          <BookingOptions booking={booking} whatsappUrl={whatsappUrl} track={track} />
         </div>
       </section>
       <section className="band band-ivory success-next" aria-labelledby="next-heading">

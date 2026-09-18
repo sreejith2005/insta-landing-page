@@ -1,14 +1,31 @@
+import { lookupPinCode, type PinCodeLookup } from "@/lib/pincode/lookup-pin-code";
 import { resolveProductContext } from "@/lib/products/resolve-product";
 import type { LeadSubmissionInput } from "@/lib/validation/schemas";
 import type { FunnelRepository, SubmitLeadResult } from "./contracts";
 
 const MINIMUM_ELAPSED_MS = 150;
 
+/**
+ * The state is derived from the PIN on the server, never taken on the
+ * browser's word. The client's autofilled value is only a fallback for when
+ * the PIN directory cannot be reached.
+ */
+async function resolveState(input: LeadSubmissionInput, lookup: PinCodeLookup) {
+  try {
+    const location = await lookup(input.pinCode);
+    return location?.state ?? input.state;
+  } catch {
+    console.error("PIN code state lookup failed; using the submitted state.");
+    return input.state;
+  }
+}
+
 export async function submitLead(
   input: LeadSubmissionInput,
   repository: FunnelRepository,
+  pinCodeLookup: PinCodeLookup = lookupPinCode,
 ): Promise<SubmitLeadResult> {
-  if (input.elapsedMs !== undefined && input.elapsedMs < MINIMUM_ELAPSED_MS) {
+  if (input.company?.trim() || (input.elapsedMs !== undefined && input.elapsedMs < MINIMUM_ELAPSED_MS)) {
     return { ok: false, code: "rejected", message: "We could not verify this submission." };
   }
 
@@ -23,8 +40,10 @@ export async function submitLead(
     return { ok: false, code: "invalid_product", message: "We could not verify this enquiry." };
   }
 
+  const lead = { ...input, state: await resolveState(input, pinCodeLookup) };
+
   try {
-    const accepted = await repository.acceptLead(input, resolved.context.productName);
+    const accepted = await repository.acceptLead(lead, resolved.context);
     if (!accepted.wasReplay) {
       const eventBase = {
         sessionId: input.sessionId,

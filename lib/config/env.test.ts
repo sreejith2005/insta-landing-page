@@ -34,6 +34,10 @@ describe("parseServerEnv", () => {
     const parsed = parseServerEnv({ ...base, NODE_ENV: "test" });
     expect(parsed.google.sheets.products).toBe("Products");
     expect(parsed.google.sheets.reelMap).toBe("Reel_Product_Map");
+    expect(parsed.google.sheets.instagramFms).toBe("Instagram_FMS");
+    expect(
+      parseServerEnv({ ...base, NODE_ENV: "test", GOOGLE_INSTAGRAM_FMS_SHEET: "" }).google.sheets.instagramFms,
+    ).toBeUndefined();
     expect(parseServerEnv({ ...base, NODE_ENV: "test", GOOGLE_REEL_MAP_SHEET: "" }).google.sheets.reelMap).toBeUndefined();
   });
 
@@ -112,5 +116,48 @@ describe("parseServerEnv", () => {
     });
     expect(recent.inquiryCount).toMatchObject({ mode: "recent", recentWindowHours: 48, allowLiveLabel: true });
     expect(parseServerEnv({ ...base, NODE_ENV: "test", SHOW_INQUIRY_COUNT: "false" }).inquiryCount.enabled).toBe(false);
+  });
+
+  it("normalises the CRM WhatsApp number and rejects malformed ones", () => {
+    expect(parseServerEnv({ ...base, NODE_ENV: "test" }).crmWhatsappNumber).toBeUndefined();
+    expect(parseServerEnv({ ...base, NODE_ENV: "test", CRM_WHATSAPP_NUMBER: "" }).crmWhatsappNumber).toBeUndefined();
+    expect(
+      parseServerEnv({ ...base, NODE_ENV: "test", CRM_WHATSAPP_NUMBER: "+91 98765-43210" }).crmWhatsappNumber,
+    ).toBe("919876543210");
+    expect(() => parseServerEnv({ ...base, NODE_ENV: "test", CRM_WHATSAPP_NUMBER: "98765" })).toThrow(/WhatsApp/);
+    expect(() => parseServerEnv({ ...base, NODE_ENV: "test", CRM_WHATSAPP_NUMBER: "wa.me/9198" })).toThrow(/WhatsApp/);
+  });
+
+  it("configures the Bookings tab and the Calendly webhook", () => {
+    const defaults = parseServerEnv({ ...base, NODE_ENV: "test" });
+    expect(defaults.google.sheets.bookings).toBe("Bookings");
+    expect(defaults.calendly).toEqual({ webhookSigningKey: undefined, eventTypes: { videoCall: [], storeVisit: [] } });
+
+    const configured = parseServerEnv({
+      ...base,
+      NODE_ENV: "test",
+      GOOGLE_BOOKINGS_SHEET: "Calendly_Bookings",
+      CALENDLY_WEBHOOK_SIGNING_KEY: "whsec",
+      CALENDLY_VIDEO_EVENT_TYPES: "https://api.calendly.com/event_types/AAA, https://api.calendly.com/event_types/BBB",
+      CALENDLY_STORE_EVENT_TYPES: "https://api.calendly.com/event_types/CCC",
+    });
+    expect(configured.google.sheets.bookings).toBe("Calendly_Bookings");
+    expect(configured.calendly).toEqual({
+      webhookSigningKey: "whsec",
+      eventTypes: {
+        videoCall: ["https://api.calendly.com/event_types/AAA", "https://api.calendly.com/event_types/BBB"],
+        storeVisit: ["https://api.calendly.com/event_types/CCC"],
+      },
+    });
+    expect(() =>
+      parseServerEnv({ ...base, NODE_ENV: "test", CALENDLY_VIDEO_EVENT_TYPES: "https://calendly.com/mk/video" }),
+    ).toThrow(/event_types/);
+  });
+
+  it("accepts a second film URL with the same rules as the brand film", () => {
+    expect(parseServerEnv({ ...base, NODE_ENV: "test", NEXT_PUBLIC_SECOND_VIDEO_URL: "/brand/second.mp4" }).public.secondVideoUrl).toBe(
+      "/brand/second.mp4",
+    );
+    expect(() => parseServerEnv({ ...base, NODE_ENV: "test", NEXT_PUBLIC_SECOND_VIDEO_URL: "http://insecure.example" })).toThrow(/https/i);
   });
 });

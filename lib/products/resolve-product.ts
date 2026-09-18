@@ -32,6 +32,9 @@ export async function resolveProductContext(
       category: record.category,
       collection: record.collection,
       campaignName: record.campaignName,
+      imageUrl: record.imageUrl,
+      calendlyStoreUrl: record.calendlyStoreUrl,
+      calendlyVideoUrl: record.calendlyVideoUrl,
     },
   };
 }

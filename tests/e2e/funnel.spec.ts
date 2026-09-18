@@ -114,22 +114,24 @@ test("the mobile sticky call to action never covers the form", async ({ page }) 
   await expect(sticky).toHaveCount(0);
 });
 
-test("the supplied local brand film is a large section directly after the hero", async ({ page }) => {
+test("the supplied local brand film opens the page full-width, autoplaying muted with an unmute control", async ({ page }) => {
   await isolate(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(validUrl);
-  const film = page.locator(".video-band");
+  const film = page.locator(".hero-film");
   test.skip((await film.count()) === 0, "No brand film present in public/brand");
 
-  expect(await film.evaluate((node) => node.previousElementSibling?.id)).toBe("hero");
-  const player = film.locator(".video-card");
-  const box = await player.boundingBox();
-  expect(box!.width).toBeGreaterThan(340);
-  expect(box!.height).toBeGreaterThan(box!.width * 0.5);
-  await expect(film.locator("video")).toHaveCount(0);
+  expect(await film.evaluate((node) => node.parentElement?.firstElementChild === node)).toBe(true);
+  expect(await film.evaluate((node) => node.nextElementSibling?.id)).toBe("hero");
+  const box = await film.boundingBox();
+  expect(box!.width).toBe(390);
+  const video = film.locator("video");
+  await expect(video.locator("source")).toHaveAttribute("src", /^\/brand\/.+\.mp4$/);
+  await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.muted)).toBe(true);
 
-  await film.getByRole("button", { name: /Play video/ }).click();
-  await expect(film.locator("video source")).toHaveAttribute("src", /^\/brand\/.+\.mp4$/);
+  await film.getByRole("button", { name: "Unmute" }).click();
+  await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.muted)).toBe(false);
+  await expect(film.getByRole("button", { name: "Mute" })).toBeVisible();
 });
 
 test("development placeholders are labelled wherever they appear", async ({ page }) => {

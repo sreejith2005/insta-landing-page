@@ -11,6 +11,8 @@ export async function POST(request: Request) {
   try {
     const parsed = leadSubmissionSchema.safeParse(await readJsonBody(request));
     if (!parsed.success) {
+      // Field names only — never values — so rejected submissions can be diagnosed without PII.
+      console.warn("Lead rejected by validation:", Object.keys(parsed.error.flatten().fieldErrors).join(", "));
       return NextResponse.json({ ok: false, message: "Please check your details and try again.", fields: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
     const result = await submitLead(parsed.data, await repository());

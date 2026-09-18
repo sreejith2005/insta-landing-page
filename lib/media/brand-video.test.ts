@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { brandVideoConfig } from "@/config/experience";
+import { brandVideoConfig, secondVideoConfig } from "@/config/experience";
 import { resolveBrandVideo } from "./brand-video";
 
 const suppliedFilm = existsSync(join(process.cwd(), "public", brandVideoConfig.src));
@@ -33,5 +33,15 @@ describe("resolveBrandVideo", () => {
     expect(resolveBrandVideo("https://youtu.be/abcdefghijk", "production")).toMatchObject({ kind: "youtube", src: "abcdefghijk" });
     expect(resolveBrandVideo("https://vimeo.com/123456789", "production")).toMatchObject({ kind: "vimeo", src: "123456789" });
     expect(resolveBrandVideo("https://cdn.example.com/film.mp4", "production")).toMatchObject({ kind: "file" });
+  });
+
+  it("resolves another film slot from its own config", () => {
+    const second = { ...secondVideoConfig, src: "/brand/does-not-exist.mp4" };
+    expect(resolveBrandVideo(undefined, "development", second)).toBeNull();
+    expect(resolveBrandVideo(undefined, "production", second)).toBeNull();
+    expect(resolveBrandVideo("https://vimeo.com/123456789", "production", secondVideoConfig)).toMatchObject({
+      kind: "vimeo",
+      title: secondVideoConfig.title,
+    });
   });
 });

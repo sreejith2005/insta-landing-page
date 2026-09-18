@@ -34,11 +34,20 @@ export const experienceCopy = {
   privacy: "Your details are shared only with MK Jewels to assist with this enquiry.",
   successHeadline: "Your exclusive benefit is unlocked.",
   successDescription: "Your enquiry has been received.",
+  /** Confirms the benefit without naming, describing or pricing the piece. */
+  successDiscountApplied: "Your making-charge discount has been applied to this enquiry.",
   representativeContact:
     "An MK Jewels representative will contact you shortly regarding the jewellery you selected.",
   successFootnote: "Please keep your phone available so our team can assist you.",
   repeatWelcome: "Welcome back.",
 } as const;
+
+/**
+ * Pre-filled WhatsApp message for the post-enquiry "Chat with us" button.
+ * `{productName}` and `{productId}` are filled from the resolved context; the
+ * text travels only inside the wa.me link and is never rendered on the page.
+ */
+export const whatsappMessageTemplate = "Hi, I'm interested in {productName} ({productId})";
 
 /**
  * Optional real campaign end date (ISO 8601). Leave null unless MK Jewels has
@@ -51,7 +60,8 @@ export const offerValidUntil: string | null = null;
  * the repository; the page never generates, pads or animates a fake count.
  * `enabled`, `mode`, `recentWindowHours`, `allowLiveLabel` and `minimumCount`
  * are overridden at runtime by the SHOW_INQUIRY_COUNT / INQUIRY_COUNT_* env vars.
- * This per-selection count is separate from static trust metrics.
+ * This per-selection count is shown beside the static trust stats in the top
+ * trust bar, but is never added to or blended with them.
  */
 export const inquiryProofConfig = {
   enabled: true,
@@ -76,6 +86,15 @@ export const inquiryProofConfig = {
 };
 
 /**
+ * The trust bar at the very top of the page: live enquiry count plus the static
+ * stats from `config/trust-stats.ts`. More than `maxStats` stats are cut off.
+ */
+export const trustBarConfig = {
+  label: "MK Jewels in numbers",
+  maxStats: 3,
+} as const;
+
+/**
  * Self-hosted brand film. Drop the approved file at `src` (and an optional
  * poster at `poster`) under /public and it is picked up automatically. The
  * NEXT_PUBLIC_BRAND_VIDEO_URL env var (hosted MP4/YouTube/Vimeo) takes priority.
@@ -89,6 +108,22 @@ export const brandVideoConfig = {
   headingLines: ["Crafted with care.", "Chosen with confidence."],
   description: "Step inside the world of MK Jewels before our team assists you with the piece you chose.",
   /** CSS aspect ratio of the supplied film, e.g. "16 / 9", "4 / 5", "9 / 16". */
+  aspectRatio: "16 / 9",
+} as const;
+
+/**
+ * Second film, shown below the enquiry form / success state. Same resolution
+ * rules as the brand film: NEXT_PUBLIC_SECOND_VIDEO_URL (hosted MP4/YouTube/
+ * Vimeo or a /public path) wins; without it, development uses `src` if that
+ * file exists and production hides the section. Plays only when pressed.
+ */
+export const secondVideoConfig = {
+  src: "/brand/mk-jewels-second-film.mp4",
+  poster: "/brand/second-film-poster.jpg",
+  title: "MK Jewels high jewellery",
+  eyebrow: "The MK Jewels collection",
+  headingLines: ["Made to be noticed.", "Made to be kept."],
+  description: "A closer look at the craftsmanship behind every MK Jewels piece.",
   aspectRatio: "16 / 9",
 } as const;
 
@@ -131,5 +166,10 @@ export const reassurancePoints = [
   { title: "Private by design", text: "Your details are used only by MK Jewels for this enquiry." },
 ] as const;
 
-/** Name of the honeypot control. Hidden from customers and assistive tech. */
-export const honeypotField = "company";
+/**
+ * Name of the honeypot control. Hidden from customers and assistive tech.
+ * Deliberately not an autofill-recognisable name ("company", "organization",
+ * "website"…): browsers autofill those even in hidden inputs, which used to
+ * reject genuine customers.
+ */
+export const honeypotField = "mkj_hp_ref";

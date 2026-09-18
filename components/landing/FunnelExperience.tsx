@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { experienceCopy } from "@/config/experience";
+import { experienceCopy, secondVideoConfig } from "@/config/experience";
 import { LeadForm } from "@/components/form/LeadForm";
-import { HeroMedia, VideoSection } from "@/components/landing/BrandVideo";
+import { HeroFilm, HeroMedia, VideoSection } from "@/components/landing/BrandVideo";
 import { FORM_SECTION_ID, Reveal, ScrollCta } from "@/components/landing/motion";
 import {
   CtaBand,
@@ -15,24 +15,27 @@ import {
   WhySection,
 } from "@/components/landing/Sections";
 import { HERO_SECTION_ID, StickyCta } from "@/components/landing/StickyCta";
-import { SuccessState } from "@/components/landing/SuccessState";
-import { TrustMetrics } from "@/components/landing/TrustMetrics";
+import { SuccessState, type BookingLinks, type TrackSuccessEvent } from "@/components/landing/SuccessState";
 import { GoogleReviews } from "@/components/social-proof/GoogleReviews";
 import { MediaProof } from "@/components/social-proof/MediaProof";
 import { Testimonials } from "@/components/social-proof/Testimonials";
 import { getSessionId } from "@/lib/attribution/session";
 import { trackFunnelEvent } from "@/lib/attribution/client-events";
 import type { BrandVideoSource } from "@/lib/media/brand-video";
-import type { InquiryProof } from "@/lib/social-proof/inquiry-proof";
 import type { ResolvedSocialProof } from "@/lib/social-proof/resolve-social-proof";
-import type { AcceptedInquiry, IncomingInstagramContext } from "@/types/funnel";
+import type { AcceptedInquiry, IncomingInstagramContext, InstagramDmContext } from "@/types/funnel";
 
 export type FunnelRuntime = {
   landingPageVersion: string;
   offerUnlockedCopy?: string;
   representativeContactCopy?: string;
   brandVideo?: BrandVideoSource | null;
-  inquiryProof?: InquiryProof | null;
+  /** Second film, below the enquiry form / success state. */
+  secondVideo?: BrandVideoSource | null;
+  /** Per-product Calendly links, shown once the offer is unlocked. */
+  booking?: BookingLinks;
+  /** CRM wa.me link with the product pre-filled, shown once the offer is unlocked. */
+  whatsappUrl?: string;
   /** Resolved on the server: approved content, or labelled dev placeholders outside production. */
   socialProof?: ResolvedSocialProof;
 };
@@ -45,35 +48,46 @@ const NO_PROOF: ResolvedSocialProof = {
   placeholders: { trustMetrics: false, googleReviews: false, testimonials: false },
 };
 
-/** Dynamic, per-selection enquiry count. Never merged with static trust metrics. */
-function InquiryPill({ proof }: { proof: InquiryProof }) {
-  const formatted = proof.count.toLocaleString("en-IN");
-  const rest = proof.label.startsWith(formatted) ? proof.label.slice(formatted.length) : ` ${proof.label}`;
+/**
+ * Below the funnel, in order: second film, Google reviews, testimonials (and
+ * approved media). Each renders nothing when it has no approved content.
+ */
+function BelowFunnel({
+  video,
+  proof,
+  submitted,
+}: {
+  video: BrandVideoSource | null;
+  proof: ResolvedSocialProof;
+  submitted: boolean;
+}) {
   return (
-    <p className={`proof-pill ${proof.live ? "is-live" : ""}`}>
-      <span className="proof-pill-mark" aria-hidden="true" />
-      <span>
-        <strong>{formatted}</strong>
-        {rest}
-      </span>
-      {proof.live ? <span className="live-badge">Live</span> : null}
-    </p>
+    <>
+      {video ? <VideoSection video={video} copy={secondVideoConfig} showCta={!submitted} /> : null}
+      <GoogleReviews content={proof.googleReviews} placeholder={proof.placeholders.googleReviews} />
+      <Testimonials items={proof.testimonials} placeholder={proof.placeholders.testimonials} />
+      <MediaProof items={proof.mediaProof} />
+    </>
   );
 }
 
 export function FunnelExperience({
   context,
+  dm,
   runtime,
 }: {
   context: IncomingInstagramContext;
+  /** Submitted with the lead only; deliberately kept out of analytics events. */
+  dm?: InstagramDmContext;
   runtime: FunnelRuntime;
 }) {
   const [accepted, setAccepted] = useState<
-    { inquiry: AcceptedInquiry; firstName: string } | null
+    { inquiry: AcceptedInquiry; sessionId: string; firstName: string } | null
   >(null);
   const viewed = useRef(false);
   const proof = runtime.socialProof ?? NO_PROOF;
   const film = runtime.brandVideo ?? null;
+  const secondFilm = runtime.secondVideo ?? null;
   const hasCustomerProof = Boolean(proof.googleReviews) || proof.testimonials.length > 0;
 
   useEffect(() => {
@@ -88,6 +102,25 @@ export function FunnelExperience({
     void trackFunnelEvent("context_resolved", tracking);
   }, [context, runtime.landingPageVersion]);
 
+  // Post-enquiry actions are tied to the accepted inquiry, never to lead PII.
+  const trackSuccess = useCallback<TrackSuccessEvent>(
+    (eventName, metadata) => {
+      if (!accepted) return;
+      void trackFunnelEvent(
+        eventName,
+        {
+          sessionId: accepted.sessionId,
+          inquiryId: accepted.inquiry.inquiryId,
+          customerId: accepted.inquiry.customerId,
+          ...context,
+          landingPageVersion: runtime.landingPageVersion,
+        },
+        metadata,
+      );
+    },
+    [accepted, context, runtime.landingPageVersion],
+  );
+
   if (accepted) {
     return (
       <>
@@ -96,7 +129,11 @@ export function FunnelExperience({
           offerCopy={runtime.offerUnlockedCopy}
           contactCopy={runtime.representativeContactCopy}
           firstName={accepted.firstName}
+          booking={runtime.booking}
+          whatsappUrl={runtime.whatsappUrl}
+          track={trackSuccess}
         />
+        <BelowFunnel video={secondFilm} proof={proof} submitted />
         <SiteFooter />
       </>
     );
@@ -105,6 +142,7 @@ export function FunnelExperience({
   return (
     <>
       <main className="pre-submit">
+        {film ? <HeroFilm video={film} /> : null}
         <section
           className={`band band-ivory hero-band${film ? " has-film" : ""}`}
           id={HERO_SECTION_ID}
@@ -112,7 +150,6 @@ export function FunnelExperience({
         >
           <div className="container hero-grid">
             <div className="hero-top">
-              {runtime.inquiryProof ? <InquiryPill proof={runtime.inquiryProof} /> : null}
               <p className="eyebrow hero-eyebrow">{experienceCopy.offerEyebrow}</p>
               <h1 id="offer-heading">
                 {experienceCopy.offerHeadlineLines.map((line, index) => (
@@ -137,14 +174,8 @@ export function FunnelExperience({
           </div>
         </section>
 
-        {film ? <VideoSection video={film} /> : null}
-        <TrustMetrics metrics={proof.trustMetrics} placeholder={proof.placeholders.trustMetrics} />
         <WhySection />
         <CtaBand />
-        <GoogleReviews content={proof.googleReviews} placeholder={proof.placeholders.googleReviews} />
-        <Testimonials items={proof.testimonials} placeholder={proof.placeholders.testimonials} />
-        <MediaProof items={proof.mediaProof} />
-        {hasCustomerProof ? <ProofCtaBand /> : null}
         <JourneySection />
 
         <section
@@ -174,11 +205,12 @@ export function FunnelExperience({
               </p>
               <LeadForm
                 context={context}
+                dm={dm}
                 landingPageVersion={runtime.landingPageVersion}
                 ctaText={experienceCopy.offerCtaText}
                 privacyText={experienceCopy.privacy}
-                onAccepted={(inquiry, _sessionId, fullName) => {
-                  setAccepted({ inquiry, firstName: fullName });
+                onAccepted={(inquiry, sessionId, fullName) => {
+                  setAccepted({ inquiry, sessionId, firstName: fullName });
                   window.scrollTo({ top: 0 });
                 }}
               />
@@ -186,6 +218,8 @@ export function FunnelExperience({
           </div>
         </section>
 
+        <BelowFunnel video={secondFilm} proof={proof} submitted={false} />
+        {hasCustomerProof ? <ProofCtaBand /> : null}
         <ReassuranceSection />
       </main>
       <SiteFooter />

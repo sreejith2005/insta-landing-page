@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Never reach the real India Post API from tests.
+vi.mock("@/lib/pincode/lookup-pin-code", () => ({
+  lookupPinCode: vi.fn().mockResolvedValue({ city: "Mumbai", state: "Maharashtra" }),
+}));
 
 import { PreviewRepository } from "@/lib/providers/preview-repository";
 import type { LeadSubmissionInput } from "@/lib/validation/schemas";
@@ -80,6 +85,30 @@ describe("submitLead", () => {
     expect(replay).toEqual(first);
     expect(repository.snapshot().inquiries).toHaveLength(1);
     expect(repository.snapshot().events).toHaveLength(2);
+  });
+
+  it("derives the state from the PIN on the server, overriding the browser's value", async () => {
+    const repository = new PreviewRepository();
+    const lookup = vi.fn().mockResolvedValue({ city: "Mumbai", state: "Maharashtra" });
+    await submitLead({ ...input, state: "Goa" }, repository, lookup);
+    expect(lookup).toHaveBeenCalledWith("400001");
+    expect(repository.snapshot().inquiries[0].state).toBe("Maharashtra");
+  });
+
+  it("falls back to the submitted state when the PIN directory is down", async () => {
+    const repository = new PreviewRepository();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const lookup = vi.fn().mockRejectedValue(new Error("down"));
+    const result = await submitLead({ ...input, state: "Maharashtra" }, repository, lookup);
+    expect(result.ok).toBe(true);
+    expect(repository.snapshot().inquiries[0].state).toBe("Maharashtra");
+  });
+
+  it("rejects a filled honeypot as a bot without saving anything", async () => {
+    const repository = new PreviewRepository();
+    const result = await submitLead({ ...input, company: "Acme" }, repository);
+    expect(result).toMatchObject({ ok: false, code: "rejected" });
+    expect(repository.snapshot().inquiries).toHaveLength(0);
   });
 
   it("rejects an implausibly fast submission", async () => {

@@ -17,7 +17,10 @@ export async function repository(): Promise<FunnelRepository> {
   if (env.dataProvider === "google-sheets") {
     if (!cache.__mkjSheetsRepository) {
       const { GoogleSheetsRepository } = await import("./google-sheets-repository");
-      cache.__mkjSheetsRepository = new GoogleSheetsRepository(env.google);
+      const { createReferenceNumberSource, redisReferenceCounter } = await import("@/lib/leads/reference-number");
+      cache.__mkjSheetsRepository = new GoogleSheetsRepository(env.google, {
+        referenceNumber: createReferenceNumberSource(redisReferenceCounter(env.rateLimit)),
+      });
     }
     return cache.__mkjSheetsRepository;
   }

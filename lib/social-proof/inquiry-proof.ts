@@ -1,8 +1,10 @@
-import type { inquiryProofConfig } from "@/config/experience";
+import { trustBarConfig, type inquiryProofConfig } from "@/config/experience";
+import type { TrustMetric } from "@/config/social-proof";
 import type { FunnelRepository, InquiryCountFilter } from "@/lib/leads/contracts";
 import type { ProductMapping } from "@/types/funnel";
 
 export type InquiryProofConfig = typeof inquiryProofConfig;
+export type TrustBarConfig = typeof trustBarConfig;
 
 /** What the page renders. Contains no product identifiers. */
 export type InquiryProof = {
@@ -97,4 +99,28 @@ export async function loadInquiryProof(
   }
   cache.set(key, { value: result, expiresAt: Date.now() + CACHE_TTL_MS });
   return result;
+}
+
+/**
+ * Everything the top trust bar renders: the live enquiry count beside the
+ * static stats from `config/trust-stats.ts`. The two are displayed together
+ * but never combined into one number.
+ */
+export type TrustBarContent = {
+  inquiry: InquiryProof | null;
+  stats: readonly TrustMetric[];
+  /** True when `stats` are labelled development placeholders. */
+  placeholder: boolean;
+};
+
+/** Null when there is nothing truthful to show, so the bar is omitted entirely. */
+export function resolveTrustBar(
+  inquiry: InquiryProof | null,
+  stats: readonly TrustMetric[],
+  placeholder: boolean,
+  config: Pick<TrustBarConfig, "maxStats"> = trustBarConfig,
+): TrustBarContent | null {
+  const shown = stats.slice(0, config.maxStats);
+  if (!inquiry && !shown.length) return null;
+  return { inquiry, stats: shown, placeholder: placeholder && shown.length > 0 };
 }

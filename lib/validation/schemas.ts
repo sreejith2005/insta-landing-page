@@ -53,7 +53,23 @@ const attributionFields = {
   ...utmFields,
 };
 
-export const incomingContextSchema = z.object(attributionFields);
+/**
+ * Forwarded by ManyChat from the DM thread (`?u=` / `?dm_ts=`); never
+ * customer-entered. Kept out of `attributionFields` so it never reaches the
+ * Events tab.
+ */
+const dmFields = {
+  instagramUsername: safeText("Instagram username", 60).optional(),
+  dmReceivedAt: z.iso.datetime({ offset: true }).optional(),
+};
+
+export const incomingContextSchema = z.object({
+  ...attributionFields,
+  // A malformed handle or timestamp is dropped rather than costing the customer
+  // the whole landing context.
+  instagramUsername: dmFields.instagramUsername.catch(undefined),
+  dmReceivedAt: dmFields.dmReceivedAt.catch(undefined),
+});
 
 /**
  * Client-built replay key. The lead key embeds the session UUID plus the full
@@ -82,12 +98,21 @@ export const leadSubmissionSchema = z.object({
     }),
   pinCode: z.string().trim().regex(PIN_CODE, fieldMessages.pinCode),
   city: safeText("City", 80),
+  /**
+   * Hidden PIN-autofill value from the browser. Advisory only: `submitLead`
+   * re-resolves the state from the PIN and uses this only if that lookup fails.
+   */
+  state: safeText("State", 60).optional(),
   ...attributionFields,
+  ...dmFields,
   sessionId: z.uuid(),
   idempotencyKey,
   landingPageVersion: identifier,
-  /** Honeypot: real customers never see or fill this control. */
-  company: z.string().max(0).optional(),
+  /**
+   * Honeypot value. Accepted here and judged in `submitLead`, so a filled trap
+   * is a bot rejection rather than a confusing "check your details" error.
+   */
+  company: z.string().max(500).optional(),
   /** Milliseconds between form render and submission, used for bot heuristics. */
   elapsedMs: z.number().int().min(0).max(86_400_000).optional(),
 });
@@ -101,6 +126,13 @@ export const eventNames = [
   "form_submitted",
   "repeat_customer_detected",
   "offer_unlocked",
+  // Post-enquiry actions. The Calendly ones are browser signals only: they say
+  // *that* a slot was picked or booked, never *when* (see the Calendly webhook).
+  "calendly_video_call_opened",
+  "calendly_store_visit_opened",
+  "calendly_date_time_selected",
+  "calendly_event_scheduled",
+  "whatsapp_contact_clicked",
 ] as const;
 
 export const eventSchema = z.object({
@@ -115,3 +147,36 @@ export const eventSchema = z.object({
 
 export type LeadSubmissionInput = z.infer<typeof leadSubmissionSchema>;
 export type EventInput = z.infer<typeof eventSchema>;
+
+/** Any signed Calendly webhook. Only `invitee.created` is acted on. */
+export const calendlyWebhookSchema = z.object({
+  event: z.string().max(80),
+});
+
+const calendlyTimestamp = z.iso.datetime({ offset: true });
+
+/**
+ * The parts of Calendly's `invitee.created` payload the Bookings tab needs.
+ * Unlisted fields are stripped; text is bounded before it reaches the sheet.
+ */
+export const calendlyInviteeCreatedSchema = z.object({
+  event: z.literal("invitee.created"),
+  payload: z.object({
+    uri: z.string().trim().min(1).max(300),
+    email: z.email().max(254),
+    name: z.string().trim().max(200),
+    /** Present only when the event type collects an SMS reminder number. */
+    text_reminder_number: z.string().max(40).nullish(),
+    questions_and_answers: z
+      .array(z.object({ question: z.string().max(1000), answer: z.string().max(2000) }))
+      .max(30)
+      .nullish(),
+    scheduled_event: z.object({
+      start_time: calendlyTimestamp,
+      end_time: calendlyTimestamp,
+      event_type: z.string().trim().max(300),
+    }),
+  }),
+});
+
+export type CalendlyInviteeCreated = z.infer<typeof calendlyInviteeCreatedSchema>;

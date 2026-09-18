@@ -9,6 +9,9 @@
  * can never reach production (see `lib/social-proof/resolve-social-proof.ts`).
  * Asset locations are documented in docs/CONTENT_ASSETS.md.
  */
+import { googleReviews } from "./google-reviews";
+import { testimonialVideos } from "./testimonial-videos";
+import { trustStats } from "./trust-stats";
 
 /** A static, approved company fact, e.g. { value: "1 Lakh+", label: "Customers Served" }. */
 export type TrustMetric = Readonly<{
@@ -63,15 +66,12 @@ export type SocialProofContent = {
 };
 
 export const socialProof: SocialProofContent = {
-  /** Approved MK Jewels business facts only. */
-  trustMetrics: [],
-  /** Curated from real public Google reviews. No scraping. */
-  googleReviews: {
-    enabled: false,
-    reviews: [],
-  },
-  /** Approved customer stories with consent. The first entry is featured. */
-  testimonials: [],
+  /** Approved MK Jewels business facts only. Edited in `config/trust-stats.ts`. */
+  trustMetrics: trustStats,
+  /** Curated from real public Google reviews. No scraping. Edited in `config/google-reviews.ts`. */
+  googleReviews,
+  /** Approved customer video stories with consent. Edited in `config/testimonial-videos.ts`. */
+  testimonials: testimonialVideos,
   /** Approved customer, bridal, store-event or press images. */
   mediaProof: [],
 };

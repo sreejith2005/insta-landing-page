@@ -3,10 +3,11 @@ import { randomUUID } from "node:crypto";
 import { google, type sheets_v4 } from "googleapis";
 
 import type { ServerEnv } from "@/lib/config/env";
-import type { FunnelRepository, InquiryCountFilter } from "@/lib/leads/contracts";
+import type { BookingRecord, FunnelRepository, InquiryContact, InquiryCountFilter } from "@/lib/leads/contracts";
+import { createReferenceNumberSource, type ReferenceNumberSource } from "@/lib/leads/reference-number";
 import type { ProductRecord } from "@/lib/products/contracts";
 import type { EventInput, LeadSubmissionInput } from "@/lib/validation/schemas";
-import type { ProductMapping } from "@/types/funnel";
+import type { ProductMapping, ResolvedAttributionContext } from "@/types/funnel";
 
 export type Row = Record<string, string>;
 
@@ -69,6 +70,37 @@ export const defaultHeaders = {
     "idempotency_key",
     "metadata_json",
   ],
+  /** Calendly bookings from the webhook. The last column makes retries idempotent. */
+  bookings: [
+    "created_at",
+    "booking_type",
+    "scheduled_start",
+    "scheduled_end",
+    "invitee_name",
+    "invitee_email",
+    "product_id",
+    "reel_id",
+    "campaign_id",
+    "calendly_invitee_uri",
+  ],
+  /** Operations tracker. Headers are the team's exact column titles. */
+  instagramFms: [
+    "Timestamp",
+    "REFERENCE NUMBER",
+    "DM RECEIVED DATE",
+    "ASSIGNED BY",
+    "CUSTOMER NAME",
+    "INSTAGRAM ID",
+    "CUSTOMER CONTACT NUMBER",
+    "ADDRESS",
+    "CITY",
+    "STATE",
+    "PIN CODE",
+    "SOURCE OF THE LEAD",
+    "PRODUCT NUMBER",
+    "PRICING",
+    "IMAGE",
+  ],
 } as const;
 
 export function headerRecord(headers: string[], values: string[]): Row {
@@ -99,10 +131,24 @@ export function productFromRow(row: Row): ProductRecord | null {
     category: row.category?.trim() || undefined,
     collection: row.collection?.trim() || undefined,
     campaignName: row.campaign_name?.trim() || undefined,
+    imageUrl: row.image_url?.trim() || undefined,
+    calendlyStoreUrl: row.calendly_store_url?.trim() || undefined,
+    calendlyVideoUrl: row.calendly_video_url?.trim() || undefined,
   };
 }
 
 const trimmed = (value: string | undefined) => (value ?? "").trim();
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/**
+ * ISO 8601 timestamp in India Standard Time, e.g. "2026-09-17T19:43:04.488+05:30".
+ * Readable at a glance by the team in the sheet, and still an exact instant for
+ * `Date.parse`, so recent-window counts are unaffected.
+ */
+export function sheetTimestamp(date: Date = new Date()) {
+  return `${new Date(date.getTime() + IST_OFFSET_MS).toISOString().slice(0, -1)}+05:30`;
+}
 
 /**
  * Resolves a context through the Reel_Product_Map tab: the exact
@@ -160,6 +206,32 @@ export function countMatchingInquiries(
   }).length;
 }
 
+/**
+ * The most recent inquiry row for a contact. Inquiries stores phone numbers
+ * but not email, so today only phones match; an `email` column, if the tab
+ * ever gains one, is matched case-insensitively too.
+ */
+export function latestInquiryForContact(rows: Row[], contact: InquiryContact): ProductMapping | null {
+  const email = contact.email?.trim().toLowerCase();
+  const phones = new Set(contact.phones);
+  let latest: { row: Row; at: number } | undefined;
+  for (const row of rows) {
+    const matches =
+      (email && trimmed(row.email).toLowerCase() === email) || phones.has(trimmed(row.phone_normalized));
+    if (!matches || !trimmed(row.product_id)) continue;
+    const at = Date.parse(row.created_at ?? "");
+    const time = Number.isFinite(at) ? at : -Infinity;
+    // `>=` so that, on equal or unreadable dates, the later-appended row wins.
+    if (!latest || time >= latest.at) latest = { row, at: time };
+  }
+  if (!latest) return null;
+  return {
+    productId: trimmed(latest.row.product_id),
+    reelId: trimmed(latest.row.reel_id),
+    campaignId: trimmed(latest.row.campaign_id),
+  };
+}
+
 export class GoogleSheetsRepository implements FunnelRepository {
   private readonly client: sheets_v4.Sheets;
   private readonly spreadsheetId: string;
@@ -168,8 +240,12 @@ export class GoogleSheetsRepository implements FunnelRepository {
   private readonly productCacheTtlMs = 90_000;
   private productCache?: { rows: Row[]; mapRows: Row[] | null; expiresAt: number };
   private mapTabUnavailable = false;
+  private readonly referenceNumber: ReferenceNumberSource;
 
-  constructor(config: ServerEnv["google"]) {
+  constructor(
+    config: ServerEnv["google"],
+    options: { referenceNumber?: ReferenceNumberSource } = {},
+  ) {
     if (!config.serviceAccountEmail || !config.privateKey || !config.spreadsheetId) {
       throw new Error("Google Sheets configuration is incomplete.");
     }
@@ -181,6 +257,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
     this.client = google.sheets({ version: "v4", auth });
     this.spreadsheetId = config.spreadsheetId;
     this.tabs = config.sheets;
+    this.referenceNumber = options.referenceNumber ?? createReferenceNumberSource();
   }
 
   private range(tab: string) {
@@ -258,7 +335,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
     return row ? productFromRow(row) : null;
   }
 
-  async acceptLead(input: LeadSubmissionInput, productName: string) {
+  async acceptLead(input: LeadSubmissionInput, product: ResolvedAttributionContext) {
     const inquiries = await this.rows(this.tabs.inquiries);
     const replay = inquiries.find((row) => row.idempotency_key === input.idempotencyKey);
     if (replay) {
@@ -274,7 +351,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
     const existing = customers.find((row) => row.phone_normalized === input.mobileNumber);
     const customerId = existing?.customer_id || `cus_${randomUUID()}`;
     const inquiryId = `inq_${randomUUID()}`;
-    const createdAt = new Date().toISOString();
+    const createdAt = sheetTimestamp();
 
     if (!existing) {
       await this.appendRecord(this.tabs.customers, defaultHeaders.customers, {
@@ -298,7 +375,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
       city: input.city,
       is_repeat_customer: String(Boolean(existing)),
       product_id: input.productId,
-      product_name: productName,
+      product_name: product.productName,
       reel_id: input.reelId,
       campaign_id: input.campaignId,
       source: input.source,
@@ -312,12 +389,52 @@ export class GoogleSheetsRepository implements FunnelRepository {
       idempotency_key: input.idempotencyKey,
     });
 
+    await this.appendInstagramFms(input, product, inquiryId, createdAt);
+
     return { inquiryId, customerId, isRepeatCustomer: Boolean(existing), wasReplay: false };
+  }
+
+  /**
+   * Operations copy of a new lead for the Instagram FMS tab. Best-effort:
+   * Inquiries is the record of truth for idempotency and replay, so a failure
+   * here is logged and never fails the customer's submission. ASSIGNED BY,
+   * ADDRESS and PRICING are left for the team and the Apps Script round-robin.
+   */
+  private async appendInstagramFms(
+    input: LeadSubmissionInput,
+    product: ResolvedAttributionContext,
+    inquiryId: string,
+    createdAt: string,
+  ) {
+    const tab = this.tabs.instagramFms;
+    if (!tab) return;
+    try {
+      await this.appendRecord(tab, defaultHeaders.instagramFms, {
+        Timestamp: createdAt,
+        "REFERENCE NUMBER": await this.referenceNumber(),
+        "DM RECEIVED DATE": input.dmReceivedAt ? sheetTimestamp(new Date(input.dmReceivedAt)) : "",
+        "ASSIGNED BY": "",
+        "CUSTOMER NAME": input.fullName,
+        "INSTAGRAM ID": input.instagramUsername ?? "",
+        "CUSTOMER CONTACT NUMBER": input.mobileNumber,
+        ADDRESS: "",
+        CITY: input.city,
+        STATE: input.state ?? "",
+        "PIN CODE": input.pinCode,
+        "SOURCE OF THE LEAD": input.source,
+        "PRODUCT NUMBER": input.productId,
+        PRICING: "",
+        IMAGE: product.imageUrl ?? "",
+      });
+    } catch (error) {
+      // Message only: a Sheets error can echo the request body, which is PII.
+      console.error("Instagram FMS write failed", { inquiryId, error: (error as Error).message });
+    }
   }
 
   async recordEvent(input: EventInput) {
     await this.appendRecord(this.tabs.events, defaultHeaders.events, {
-      created_at: new Date().toISOString(),
+      created_at: sheetTimestamp(),
       event_name: input.eventName,
       session_id: input.sessionId,
       inquiry_id: input.inquiryId ?? "",
@@ -334,5 +451,30 @@ export class GoogleSheetsRepository implements FunnelRepository {
 
   async countInquiriesForContext(filter: InquiryCountFilter) {
     return countMatchingInquiries(await this.rows(this.tabs.inquiries), filter);
+  }
+
+  async findLatestInquiryByContact(contact: InquiryContact) {
+    if (!contact.email && !contact.phones.length) return null;
+    return latestInquiryForContact(await this.rows(this.tabs.inquiries), contact);
+  }
+
+  async recordBooking(booking: BookingRecord) {
+    const existing = await this.rows(this.tabs.bookings);
+    if (existing.some((row) => trimmed(row.calendly_invitee_uri) === booking.inviteeUri)) {
+      return { wasReplay: true };
+    }
+    await this.appendRecord(this.tabs.bookings, defaultHeaders.bookings, {
+      created_at: sheetTimestamp(),
+      booking_type: booking.bookingType,
+      scheduled_start: sheetTimestamp(new Date(booking.scheduledStart)),
+      scheduled_end: sheetTimestamp(new Date(booking.scheduledEnd)),
+      invitee_name: booking.inviteeName,
+      invitee_email: booking.inviteeEmail,
+      product_id: booking.attribution?.productId ?? "",
+      reel_id: booking.attribution?.reelId ?? "",
+      campaign_id: booking.attribution?.campaignId ?? "",
+      calendly_invitee_uri: booking.inviteeUri,
+    });
+    return { wasReplay: false };
   }
 }

@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 
 import { previewProducts } from "@/data/preview-products";
-import type { FunnelRepository, InquiryCountFilter } from "@/lib/leads/contracts";
+import type { BookingRecord, FunnelRepository, InquiryContact, InquiryCountFilter } from "@/lib/leads/contracts";
 import type { ProductRecord } from "@/lib/products/contracts";
 import type { EventInput, LeadSubmissionInput } from "@/lib/validation/schemas";
-import type { ProductMapping } from "@/types/funnel";
+import type { ProductMapping, ResolvedAttributionContext } from "@/types/funnel";
 
 type Inquiry = LeadSubmissionInput & {
   productName: string;
@@ -21,6 +21,7 @@ export class PreviewRepository implements FunnelRepository {
     { inquiryId: string; customerId: string; isRepeatCustomer: boolean }
   >();
   private readonly events: EventInput[] = [];
+  private readonly bookings: BookingRecord[] = [];
 
   constructor(private readonly options: { failWrites?: boolean; products?: ProductRecord[] } = {}) {}
 
@@ -35,7 +36,7 @@ export class PreviewRepository implements FunnelRepository {
     );
   }
 
-  async acceptLead(input: LeadSubmissionInput, productName: string) {
+  async acceptLead(input: LeadSubmissionInput, { productName }: ResolvedAttributionContext) {
     if (this.options.failWrites) throw new Error("preview write failure");
     const replay = this.idempotency.get(input.idempotencyKey);
     if (replay) return { ...replay, wasReplay: true };
@@ -74,11 +75,25 @@ export class PreviewRepository implements FunnelRepository {
     }).length;
   }
 
+  /** Preview inquiries carry no email, so only phones match. Latest wins. */
+  async findLatestInquiryByContact(contact: InquiryContact) {
+    const match = this.inquiries.findLast((inquiry) => contact.phones.includes(inquiry.mobileNumber));
+    return match ? { productId: match.productId, reelId: match.reelId, campaignId: match.campaignId } : null;
+  }
+
+  async recordBooking(booking: BookingRecord) {
+    if (this.options.failWrites) throw new Error("preview write failure");
+    if (this.bookings.some((existing) => existing.inviteeUri === booking.inviteeUri)) return { wasReplay: true };
+    this.bookings.push(structuredClone(booking));
+    return { wasReplay: false };
+  }
+
   snapshot() {
     return {
       customers: [...this.customers.entries()],
       inquiries: structuredClone(this.inquiries),
       events: structuredClone(this.events),
+      bookings: structuredClone(this.bookings),
     };
   }
 }

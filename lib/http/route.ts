@@ -3,6 +3,8 @@ import { createRateLimiter } from "@/lib/rate-limit/create-limiter";
 const mutationLimiters = {
   lead: createRateLimiter({ limit: 6, windowMs: 60_000, prefix: "ratelimit:lead" }),
   events: createRateLimiter({ limit: 40, windowMs: 60_000, prefix: "ratelimit:events" }),
+  /** Read-only, but it proxies a third-party API, so it is bounded too. */
+  pincode: createRateLimiter({ limit: 30, windowMs: 60_000, prefix: "ratelimit:pincode" }),
 };
 
 function jsonError(status: number, message: string) {

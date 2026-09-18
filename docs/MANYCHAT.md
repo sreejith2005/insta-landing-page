@@ -18,9 +18,34 @@ landing page begins only after ManyChat has selected a canonical product ID.
 | `utm_campaign` | No | Marketing attribution |
 | `utm_content` | No | Marketing attribution, including resolved position |
 | `utm_term` | No | Marketing attribution |
+| `u` (alias `ig`) | No | Customer's Instagram username, with or without `@` |
+| `dm_ts` | No | When the DM arrived: Unix milliseconds (seconds also accepted) or ISO 8601 |
 
 Identifiers allow letters, digits, `_`, and `-`, up to 80 characters. UTM
 values are bounded and validated before persistence.
+
+`u` and `dm_ts` are lead data, not attribution: they are submitted with the
+enquiry (and written to the Instagram FMS tab) but never recorded as funnel
+events. A malformed value is silently dropped; it never blocks the page.
+
+## Required: DM context on the "Yes, show me" button
+
+The ManyChat flow's **"Yes, show me"** dynamic block must append the DM context
+to the landing URL, in addition to the `product`, `reel`, `campaign` (and any
+`source`/UTM) parameters it already sets:
+
+```text
+&u={{username}}&dm_ts={{timestamp}}
+```
+
+Full template:
+
+```text
+https://<domain>/instagram?product=<id>&reel=<reel>&campaign=<campaign>&source=manychat&u={{username}}&dm_ts={{timestamp}}
+```
+
+Without these the lead still saves, but the Instagram FMS tab's `INSTAGRAM ID`
+and `DM RECEIVED DATE` columns are left blank for the team to fill manually.
 
 ## Single-product example
 

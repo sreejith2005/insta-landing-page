@@ -8,6 +8,8 @@ import type { EventInput } from "@/lib/validation/schemas";
 const allowedMetadata = new Set([
   "reason",
   "productPosition",
+  /** "video_call" | "store_visit", on Calendly events. */
+  "bookingType",
 ]);
 
 export async function recordEvent(input: EventInput, repository: FunnelRepository) {

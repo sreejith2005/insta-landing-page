@@ -29,8 +29,8 @@ describe("leadSubmissionSchema", () => {
     expect(leadSubmissionSchema.parse(withoutSource).source).toBe("instagram");
   });
 
-  it("rejects a filled honeypot", () => {
-    expect(() => leadSubmissionSchema.parse({ ...valid, company: "Acme" })).toThrow();
+  it("leaves honeypot judgement to submitLead instead of failing field validation", () => {
+    expect(leadSubmissionSchema.parse({ ...valid, company: "Acme" }).company).toBe("Acme");
   });
 
   it.each([
@@ -42,12 +42,45 @@ describe("leadSubmissionSchema", () => {
     ["productId", "../../secret"],
     ["source", "facebook"],
     ["utmSource", "<script>"],
+    ["instagramUsername", "<b>x</b>"],
+    ["instagramUsername", "x".repeat(61)],
+    ["dmReceivedAt", "yesterday"],
   ])("rejects invalid %s", (key, value) => {
     expect(() => leadSubmissionSchema.parse({ ...valid, [key]: value })).toThrow();
   });
 });
 
+describe("leadSubmissionSchema DM fields", () => {
+  it("accepts an Instagram username and DM timestamp", () => {
+    expect(
+      leadSubmissionSchema.parse({ ...valid, instagramUsername: "ananya.s", dmReceivedAt: "2026-09-17T14:13:04.000Z" }),
+    ).toMatchObject({ instagramUsername: "ananya.s", dmReceivedAt: "2026-09-17T14:13:04.000Z" });
+  });
+
+  it("keeps both optional", () => {
+    const parsed = leadSubmissionSchema.parse(valid);
+    expect(parsed.instagramUsername).toBeUndefined();
+    expect(parsed.dmReceivedAt).toBeUndefined();
+  });
+});
+
 describe("incomingContextSchema", () => {
+  const base = { productId: "RG5074", reelId: "R456", campaignId: "BRIDAL26" };
+
+  it("carries the DM username and timestamp through", () => {
+    expect(
+      incomingContextSchema.parse({ ...base, instagramUsername: "ananya.s", dmReceivedAt: "2026-09-17T14:13:04.000Z" }),
+    ).toMatchObject({ instagramUsername: "ananya.s", dmReceivedAt: "2026-09-17T14:13:04.000Z" });
+  });
+
+  it("drops a malformed DM value instead of rejecting the whole context", () => {
+    const parsed = incomingContextSchema.safeParse({ ...base, instagramUsername: "<script>", dmReceivedAt: "soon" });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toMatchObject({ productId: "RG5074" });
+    expect(parsed.data?.instagramUsername).toBeUndefined();
+    expect(parsed.data?.dmReceivedAt).toBeUndefined();
+  });
+
   it("carries optional UTM attribution through", () => {
     expect(
       incomingContextSchema.parse({
@@ -87,5 +120,26 @@ describe("eventSchema", () => {
       "offer_unlocked",
     );
     expect(() => eventSchema.parse({ ...baseEvent, eventName: "product_revealed" })).toThrow();
+  });
+
+  it("accepts the post-enquiry booking and WhatsApp events", () => {
+    const baseEvent = {
+      sessionId: valid.sessionId,
+      inquiryId: "inq_1",
+      productId: valid.productId,
+      reelId: valid.reelId,
+      campaignId: valid.campaignId,
+      source: valid.source,
+      landingPageVersion: valid.landingPageVersion,
+    };
+    for (const eventName of [
+      "calendly_video_call_opened",
+      "calendly_store_visit_opened",
+      "calendly_date_time_selected",
+      "calendly_event_scheduled",
+      "whatsapp_contact_clicked",
+    ]) {
+      expect(eventSchema.parse({ ...baseEvent, eventName, metadata: { bookingType: "video_call" } }).eventName).toBe(eventName);
+    }
   });
 });

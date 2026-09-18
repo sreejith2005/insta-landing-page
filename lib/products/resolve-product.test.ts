@@ -20,6 +20,26 @@ function repository(record: ProductRecord | null): ProductRepository {
 }
 
 describe("resolveProductContext", () => {
+  it("threads the image and booking links through the resolved context", async () => {
+    const result = await resolveProductContext(
+      { productId: "MK001", reelId: "R101", campaignId: "RAKHI26" },
+      repository({
+        ...mapping,
+        imageUrl: "https://cdn.example.com/mk001.jpg",
+        calendlyStoreUrl: "https://calendly.com/mkjewels/store",
+        calendlyVideoUrl: "https://calendly.com/mkjewels/video",
+      }),
+    );
+    expect(result).toMatchObject({
+      status: "resolved",
+      context: {
+        imageUrl: "https://cdn.example.com/mk001.jpg",
+        calendlyStoreUrl: "https://calendly.com/mkjewels/store",
+        calendlyVideoUrl: "https://calendly.com/mkjewels/video",
+      },
+    });
+  });
+
   it("returns only the internal attribution mapping for an active exact tuple", async () => {
     const result = await resolveProductContext(
       { productId: "MK001", reelId: "R101", campaignId: "RAKHI26" },

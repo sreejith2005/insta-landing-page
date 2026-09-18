@@ -5,15 +5,18 @@ import { after } from "next/server";
 import { BrandHeader } from "@/components/brand/BrandHeader";
 import { ContextState } from "@/components/landing/ContextState";
 import { FunnelExperience } from "@/components/landing/FunnelExperience";
-import { AnnouncementBar } from "@/components/landing/AnnouncementBar";
-import { inquiryProofConfig } from "@/config/experience";
+import { TrustBar } from "@/components/landing/TrustBar";
+import { inquiryProofConfig, secondVideoConfig } from "@/config/experience";
 import { socialProof } from "@/config/social-proof";
 import { DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF } from "@/config/social-proof.development";
+import { normalizeDmTimestamp, normalizeInstagramUsername } from "@/lib/attribution/instagram-dm";
 import { publicEnv, serverEnv } from "@/lib/config/env";
+import { calendlyUrl } from "@/lib/contact/calendly";
+import { whatsappContactUrl } from "@/lib/contact/whatsapp";
 import { resolveBrandVideo } from "@/lib/media/brand-video";
 import { repository } from "@/lib/providers/repository";
 import { resolveProductContext } from "@/lib/products/resolve-product";
-import { loadInquiryProof } from "@/lib/social-proof/inquiry-proof";
+import { loadInquiryProof, resolveTrustBar } from "@/lib/social-proof/inquiry-proof";
 import { resolveSocialProof } from "@/lib/social-proof/resolve-social-proof";
 import { incomingContextSchema } from "@/lib/validation/schemas";
 
@@ -38,22 +41,27 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
     utmCampaign: single(query.utm_campaign),
     utmContent: single(query.utm_content),
     utmTerm: single(query.utm_term),
+    instagramUsername: normalizeInstagramUsername(single(query.u) ?? single(query.ig)),
+    dmReceivedAt: normalizeDmTimestamp(single(query.dm_ts)),
   });
   if (!parsed.success) return <ContextState status="missing" supportUrl={supportUrl} />;
+  // The DM fields travel only with the lead submission; attribution alone feeds
+  // resolution, analytics events and the enquiry count.
+  const { instagramUsername, dmReceivedAt, ...attribution } = parsed.data;
 
   const runtime = publicEnv();
   let resolved;
   let dataRepository: Awaited<ReturnType<typeof repository>>;
   try {
     dataRepository = await repository();
-    resolved = await resolveProductContext(parsed.data, dataRepository);
+    resolved = await resolveProductContext(attribution, dataRepository);
   } catch (error) {
     console.error("Product context resolution failed:", error);
     return <ContextState status="invalid" supportUrl={supportUrl} />;
   }
 
   if (resolved.status !== "resolved") {
-    const context = parsed.data;
+    const context = attribution;
     const status = resolved.status;
     // Recorded after the response so a failed context never delays the page.
     after(async () => {
@@ -81,28 +89,37 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
   const inquiryProof = await loadInquiryProof(
     { ...inquiryProofConfig, ...env.inquiryCount },
     dataRepository,
-    parsed.data,
+    attribution,
+  );
+  // Placeholders are resolved here, on the server, and refused in production.
+  const proof = resolveSocialProof(
+    socialProof,
+    DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF,
+    env.showDevelopmentSocialProof,
+    env.nodeEnv,
   );
 
   return (
     <div className="shell">
-      <AnnouncementBar />
+      <TrustBar content={resolveTrustBar(inquiryProof, proof.trustMetrics, proof.placeholders.trustMetrics)} />
       <BrandHeader preview={runtime.isPreview} />
       <FunnelExperience
-        context={parsed.data}
+        context={attribution}
+        dm={{ instagramUsername, dmReceivedAt }}
         runtime={{
           landingPageVersion: runtime.landingPageVersion,
           offerUnlockedCopy: runtime.offerUnlockedCopy,
           representativeContactCopy: runtime.representativeContactCopy,
           brandVideo: resolveBrandVideo(runtime.brandVideoUrl),
-          inquiryProof,
-          // Placeholders are resolved here, on the server, and refused in production.
-          socialProof: resolveSocialProof(
-            socialProof,
-            DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF,
-            env.showDevelopmentSocialProof,
-            env.nodeEnv,
-          ),
+          secondVideo: resolveBrandVideo(runtime.secondVideoUrl, undefined, secondVideoConfig),
+          // Only the two booking links and the WhatsApp link leave the server;
+          // the image URL and the rest of the product record stay internal.
+          booking: {
+            videoUrl: calendlyUrl(resolved.context.calendlyVideoUrl),
+            storeUrl: calendlyUrl(resolved.context.calendlyStoreUrl),
+          },
+          whatsappUrl: whatsappContactUrl(env.crmWhatsappNumber, resolved.context),
+          socialProof: proof,
         }}
       />
     </div>

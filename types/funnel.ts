@@ -27,6 +27,13 @@ export type IncomingInstagramContext = ProductMapping &
     contextToken?: string;
   };
 
+/** The Instagram DM that led here, forwarded by ManyChat. Lead data only, never an event. */
+export type InstagramDmContext = {
+  instagramUsername?: string;
+  /** ISO 8601. */
+  dmReceivedAt?: string;
+};
+
 /** Internal Product_Master record. Product data is attribution, never UI. */
 export type AttributionMapping = ProductMapping & {
   productName: string;
@@ -34,6 +41,11 @@ export type AttributionMapping = ProductMapping & {
   category?: string;
   collection?: string;
   campaignName?: string;
+  /** Written to the Instagram FMS tab; never rendered. */
+  imageUrl?: string;
+  /** Per-product booking links, offered only after the lead is saved. */
+  calendlyStoreUrl?: string;
+  calendlyVideoUrl?: string;
   active: boolean;
 };
 
@@ -60,4 +72,9 @@ export type FunnelEventName =
   | "form_validation_failed"
   | "form_submitted"
   | "repeat_customer_detected"
-  | "offer_unlocked";
+  | "offer_unlocked"
+  | "calendly_video_call_opened"
+  | "calendly_store_visit_opened"
+  | "calendly_date_time_selected"
+  | "calendly_event_scheduled"
+  | "whatsapp_contact_clicked";

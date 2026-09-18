@@ -32,7 +32,7 @@ describe("LeadForm", () => {
 
   it("keeps the honeypot out of the accessibility tree and tab order", () => {
     const { container } = render(<LeadForm context={context} onAccepted={() => undefined} />);
-    const honeypot = container.querySelector<HTMLInputElement>("#company");
+    const honeypot = container.querySelector<HTMLInputElement>("#mkj_hp_ref");
     expect(honeypot).not.toBeNull();
     expect(honeypot).toHaveAttribute("tabindex", "-1");
     expect(honeypot?.closest("[aria-hidden='true']")).not.toBeNull();
@@ -84,6 +84,74 @@ describe("LeadForm", () => {
     });
     expect(body.company).toBe("");
     expect(typeof body.elapsedMs).toBe("number");
+  });
+
+  it("submits the ManyChat DM context as hidden lead fields", async () => {
+    const fetchSpy = vi.fn((...args: [string, RequestInit?]) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ ok: true, inquiryId: "inq_1", customerId: "cus_1", isRepeatCustomer: false }),
+          { status: args[0] === "/api/lead" ? 201 : 202, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    render(
+      <LeadForm
+        context={context}
+        dm={{ instagramUsername: "ananya.s", dmReceivedAt: "2026-09-17T14:13:04.000Z" }}
+        onAccepted={() => undefined}
+      />,
+    );
+    expect(screen.queryByDisplayValue("ananya.s")).not.toBeInTheDocument();
+    await fillValidLead();
+    await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
+
+    await waitFor(() =>
+      expect(fetchSpy.mock.calls.filter(([url]) => url === "/api/lead")).toHaveLength(1),
+    );
+    const leadBody = JSON.parse(String(fetchSpy.mock.calls.find(([url]) => url === "/api/lead")?.[1]?.body));
+    expect(leadBody).toMatchObject({ instagramUsername: "ananya.s", dmReceivedAt: "2026-09-17T14:13:04.000Z" });
+    // The handle is lead data only; analytics events never carry it.
+    for (const [url, init] of fetchSpy.mock.calls) {
+      if (url === "/api/events") expect(String(init?.body)).not.toContain("ananya.s");
+    }
+  });
+
+  it("autofills city and a hidden state from the PIN, and submits the state", async () => {
+    const fetchSpy = vi.fn((...args: [string, RequestInit?]) =>
+      Promise.resolve(
+        args[0].startsWith("/api/pincode/")
+          ? Response.json({ ok: true, city: "Mumbai", state: "Maharashtra" })
+          : Response.json({ ok: true, inquiryId: "inq_1", customerId: "cus_1", isRepeatCustomer: false }, { status: 201 }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    render(<LeadForm context={context} onAccepted={() => undefined} />);
+    await userEvent.type(screen.getByLabelText("Full Name"), "Ananya Shah");
+    await userEvent.type(screen.getByLabelText("Mobile Number"), "9876543210");
+    await userEvent.type(screen.getByLabelText("PIN Code"), "400001");
+
+    await waitFor(() => expect(screen.getByLabelText("City")).toHaveValue("Mumbai"));
+    const pinCalls = fetchSpy.mock.calls.map(([url]) => url).filter((url) => url.startsWith("/api/pincode/"));
+    expect(pinCalls).toEqual(["/api/pincode/400001"]);
+    // Still editable after autofill.
+    await userEvent.clear(screen.getByLabelText("City"));
+    await userEvent.type(screen.getByLabelText("City"), "Navi Mumbai");
+    await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
+
+    await waitFor(() => expect(fetchSpy.mock.calls.filter(([url]) => url === "/api/lead")).toHaveLength(1));
+    const body = JSON.parse(String(fetchSpy.mock.calls.find(([url]) => url === "/api/lead")?.[1]?.body));
+    expect(body).toMatchObject({ city: "Navi Mumbai", state: "Maharashtra" });
+  });
+
+  it("never overwrites a city the customer typed", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(Response.json({ ok: true, city: "Mumbai", state: "Maharashtra" }))));
+    render(<LeadForm context={context} onAccepted={() => undefined} />);
+    await userEvent.type(screen.getByLabelText("City"), "Thane");
+    await userEvent.type(screen.getByLabelText("PIN Code"), "400001");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByLabelText("City")).toHaveValue("Thane");
   });
 
   it("confirms only after an accepted response and protects double submit", async () => {

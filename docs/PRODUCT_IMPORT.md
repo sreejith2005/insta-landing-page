@@ -16,6 +16,9 @@ them is displayed on the landing page.
 | `category` | No | Internal reporting field |
 | `collection` | No | Internal reporting field |
 | `campaign_name` | No | Internal reporting label |
+| `image_url` | No | Product image, copied to the Instagram FMS tab's `IMAGE` column; never shown on the page |
+| `calendly_video_url` | No | `https://calendly.com/...` scheduling link; adds a "Book a video call" button (inline Calendly scheduler) after the enquiry is saved. Other hosts are ignored. |
+| `calendly_store_url` | No | `https://calendly.com/...` scheduling link; adds a "Book a store visit" button (inline Calendly scheduler) after the enquiry is saved. Other hosts are ignored. |
 
 \* Required only in flat mode (`GOOGLE_REEL_MAP_SHEET` empty).
 
@@ -40,8 +43,8 @@ To reuse a product in a new Reel, add a map row; do not duplicate the product.
 - The application never changes the spreadsheet schema.
 - Columns are matched by header name, so order does not matter, but names must
   match exactly.
-- Do not add image, specification, price, appointment or messaging columns;
-  they are ignored.
+- Only the columns above are read. Specification, price and messaging columns
+  are ignored.
 - Keep Customers, Inquiries and Events history. Never insert or delete a column
   in Inquiries without shifting the existing rows with it, or old rows will be
   read under the wrong headers.

@@ -3,6 +3,9 @@ import { join } from "node:path";
 
 import { brandVideoConfig } from "@/config/experience";
 
+/** Where a film's local fallback, poster, title and shape come from. */
+export type VideoConfig = { src: string; poster: string; title: string; aspectRatio: string };
+
 export type BrandVideoSource = {
   kind: "file" | "youtube" | "vimeo";
   /** File URL, or the provider's video id. */
@@ -39,17 +42,19 @@ function providerSource(url: URL): Pick<BrandVideoSource, "kind" | "src"> {
 }
 
 /**
- * Resolves the brand film. An explicit NEXT_PUBLIC_BRAND_VIDEO_URL (https URL
- * or /public path) always wins. Without one, development automatically uses
- * `brandVideoConfig.src` when that file exists; production requires the env
- * var so a stray local file is never published by accident.
+ * Resolves a film (the brand film by default; pass `config` for another slot).
+ * An explicit env URL (https URL or /public path) always wins. Without one,
+ * development automatically uses `config.src` when that file exists;
+ * production requires the env var so a stray local file is never published by
+ * accident.
  */
 export function resolveBrandVideo(
   envUrl: string | undefined,
   nodeEnv: string | undefined = process.env.NODE_ENV,
+  config: VideoConfig = brandVideoConfig,
 ): BrandVideoSource | null {
-  const poster = publicFileExists(brandVideoConfig.poster) ? brandVideoConfig.poster : undefined;
-  const base = { poster, title: brandVideoConfig.title, aspectRatio: brandVideoConfig.aspectRatio };
+  const poster = publicFileExists(config.poster) ? config.poster : undefined;
+  const base = { poster, title: config.title, aspectRatio: config.aspectRatio };
 
   if (envUrl) {
     if (envUrl.startsWith("/")) {
@@ -65,5 +70,5 @@ export function resolveBrandVideo(
   }
 
   if (nodeEnv === "production") return null;
-  return publicFileExists(brandVideoConfig.src) ? { ...base, kind: "file", src: brandVideoConfig.src } : null;
+  return publicFileExists(config.src) ? { ...base, kind: "file", src: config.src } : null;
 }
