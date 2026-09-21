@@ -3,11 +3,17 @@ import { randomUUID } from "node:crypto";
 import { google, type sheets_v4 } from "googleapis";
 
 import type { ServerEnv } from "@/lib/config/env";
-import type { BookingRecord, FunnelRepository, InquiryContact, InquiryCountFilter } from "@/lib/leads/contracts";
+import type {
+  BookingRecord,
+  FunnelRepository,
+  InquiryContact,
+  InquiryCountFilter,
+  InquiryMatch,
+} from "@/lib/leads/contracts";
 import { createReferenceNumberSource, type ReferenceNumberSource } from "@/lib/leads/reference-number";
 import type { ProductRecord } from "@/lib/products/contracts";
 import type { EventInput, LeadSubmissionInput } from "@/lib/validation/schemas";
-import type { ProductMapping, ResolvedAttributionContext } from "@/types/funnel";
+import type { ProductMapping, ReelMapping, ResolvedAttributionContext } from "@/types/funnel";
 
 export type Row = Record<string, string>;
 
@@ -55,6 +61,8 @@ export const defaultHeaders = {
     "session_id",
     "landing_page_version",
     "idempotency_key",
+    /** Same value as the FMS tab's REFERENCE NUMBER; lets a booking find it from the inquiry ID. */
+    "reference_number",
   ],
   events: [
     "created_at",
@@ -70,7 +78,10 @@ export const defaultHeaders = {
     "idempotency_key",
     "metadata_json",
   ],
-  /** Calendly bookings from the webhook. The last column makes retries idempotent. */
+  /**
+   * Calendly bookings from the webhook. `calendly_invitee_uri` makes retries
+   * idempotent; `reference_number` cross-references the Instagram FMS tab.
+   */
   bookings: [
     "created_at",
     "booking_type",
@@ -82,6 +93,7 @@ export const defaultHeaders = {
     "reel_id",
     "campaign_id",
     "calendly_invitee_uri",
+    "reference_number",
   ],
   /** Operations tracker. Headers are the team's exact column titles. */
   instagramFms: [
@@ -224,6 +236,35 @@ export function productFromMap(
   return { ...record, active: boolean(mapping.active_status) && productActive };
 }
 
+/** Stable sort by product_position; unpositioned products keep sheet order, last. */
+export function byProductPosition(records: ProductRecord[]) {
+  return [...records].sort(
+    (a, b) => (a.productPosition ?? Number.POSITIVE_INFINITY) - (b.productPosition ?? Number.POSITIVE_INFINITY),
+  );
+}
+
+/**
+ * Every active product a Reel/campaign maps to, for a link that names no
+ * product. Each candidate goes through `productFromMap`, so it is exactly the
+ * record a link naming that product would resolve to, and only records that
+ * would resolve as active are returned.
+ */
+export function productsForReel(productRows: Row[], mapRows: Row[], context: ReelMapping): ProductRecord[] {
+  const productIds = new Set(
+    mapRows
+      .filter(
+        (row) =>
+          trimmed(row.reel_id) === context.reelId &&
+          trimmed(row.campaign_id) === context.campaignId &&
+          boolean(row.active_status),
+      )
+      .map((row) => trimmed(row.product_id))
+      .filter(Boolean),
+  );
+  const records = [...productIds].map((productId) => productFromMap(productRows, mapRows, { ...context, productId }));
+  return byProductPosition(records.filter((record): record is ProductRecord => Boolean(record?.active)));
+}
+
 export function countMatchingInquiries(
   rows: Row[],
   filter: InquiryCountFilter,
@@ -241,12 +282,28 @@ export function countMatchingInquiries(
   }).length;
 }
 
+function inquiryMatch(row: Row): InquiryMatch {
+  return {
+    inquiryId: trimmed(row.inquiry_id),
+    referenceNumber: trimmed(row.reference_number),
+    productId: trimmed(row.product_id),
+    reelId: trimmed(row.reel_id),
+    campaignId: trimmed(row.campaign_id),
+  };
+}
+
+/** The inquiry row with this ID. IDs are unique, so the first match is the only one. */
+export function inquiryById(rows: Row[], inquiryId: string): InquiryMatch | null {
+  const row = rows.find((candidate) => trimmed(candidate.inquiry_id) === inquiryId);
+  return row ? inquiryMatch(row) : null;
+}
+
 /**
  * The most recent inquiry row for a contact. Inquiries stores phone numbers
  * but not email, so today only phones match; an `email` column, if the tab
  * ever gains one, is matched case-insensitively too.
  */
-export function latestInquiryForContact(rows: Row[], contact: InquiryContact): ProductMapping | null {
+export function latestInquiryForContact(rows: Row[], contact: InquiryContact): InquiryMatch | null {
   const email = contact.email?.trim().toLowerCase();
   const phones = new Set(contact.phones);
   let latest: { row: Row; at: number } | undefined;
@@ -259,12 +316,7 @@ export function latestInquiryForContact(rows: Row[], contact: InquiryContact): P
     // `>=` so that, on equal or unreadable dates, the later-appended row wins.
     if (!latest || time >= latest.at) latest = { row, at: time };
   }
-  if (!latest) return null;
-  return {
-    productId: trimmed(latest.row.product_id),
-    reelId: trimmed(latest.row.reel_id),
-    campaignId: trimmed(latest.row.campaign_id),
-  };
+  return latest ? inquiryMatch(latest.row) : null;
 }
 
 export class GoogleSheetsRepository implements FunnelRepository {
@@ -370,6 +422,21 @@ export class GoogleSheetsRepository implements FunnelRepository {
     return row ? productFromRow(row) : null;
   }
 
+  async findActiveByReel(context: ReelMapping) {
+    const { rows, mapRows } = await this.productData();
+    if (mapRows) return productsForReel(rows, mapRows, context);
+    // Flat product tab: the first row per product_id decides, as `findByContext` does.
+    const records = new Map<string, ProductRecord | null>();
+    for (const row of rows) {
+      if (row.reel_id?.trim() !== context.reelId || row.campaign_id?.trim() !== context.campaignId) continue;
+      const productId = row.product_id?.trim();
+      if (productId && !records.has(productId)) records.set(productId, productFromRow(row));
+    }
+    return byProductPosition(
+      [...records.values()].filter((record): record is ProductRecord => Boolean(record?.active)),
+    );
+  }
+
   async acceptLead(input: LeadSubmissionInput, product: ResolvedAttributionContext) {
     const inquiries = await this.rows(this.tabs.inquiries);
     const replay = inquiries.find((row) => row.idempotency_key === input.idempotencyKey);
@@ -388,6 +455,8 @@ export class GoogleSheetsRepository implements FunnelRepository {
     const inquiryId = `inq_${randomUUID()}`;
     const now = new Date();
     const createdAt = sheetTimestamp(now);
+    // Issued before either write so Inquiries and the FMS tab hold the same one.
+    const referenceNumber = await this.referenceNumber(now);
 
     if (!existing) {
       await this.appendRecord(this.tabs.customers, defaultHeaders.customers, {
@@ -410,7 +479,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
       pin_code: input.pinCode,
       city: input.city,
       is_repeat_customer: String(Boolean(existing)),
-      product_id: input.productId,
+      product_id: input.productId ?? "",
       product_name: product.productName,
       reel_id: input.reelId,
       campaign_id: input.campaignId,
@@ -423,9 +492,10 @@ export class GoogleSheetsRepository implements FunnelRepository {
       session_id: input.sessionId,
       landing_page_version: input.landingPageVersion,
       idempotency_key: input.idempotencyKey,
+      reference_number: referenceNumber,
     });
 
-    await this.appendInstagramFms(input, product, inquiryId, now);
+    await this.appendInstagramFms(input, product, inquiryId, referenceNumber, now);
 
     return { inquiryId, customerId, isRepeatCustomer: Boolean(existing), wasReplay: false };
   }
@@ -440,6 +510,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
     input: LeadSubmissionInput,
     product: ResolvedAttributionContext,
     inquiryId: string,
+    referenceNumber: string,
     createdAt: Date,
   ) {
     const tab = this.tabs.instagramFms;
@@ -450,7 +521,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
     try {
       await this.appendRecord(tab, defaultHeaders.instagramFms, {
         Timestamp: fmsDateTime(createdAt),
-        "REFERENCE NUMBER": await this.referenceNumber(),
+        "REFERENCE NUMBER": referenceNumber,
         "DM RECEIVED DATE": fmsDateOnly(dmDate),
         "ASSIGNED BY": "",
         "CUSTOMER NAME": input.fullName,
@@ -478,7 +549,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
       session_id: input.sessionId,
       inquiry_id: input.inquiryId ?? "",
       customer_id: input.customerId ?? "",
-      product_id: input.productId,
+      product_id: input.productId ?? "",
       reel_id: input.reelId,
       campaign_id: input.campaignId,
       source: input.source,
@@ -490,6 +561,10 @@ export class GoogleSheetsRepository implements FunnelRepository {
 
   async countInquiriesForContext(filter: InquiryCountFilter) {
     return countMatchingInquiries(await this.rows(this.tabs.inquiries), filter);
+  }
+
+  async findInquiryById(inquiryId: string) {
+    return inquiryById(await this.rows(this.tabs.inquiries), inquiryId);
   }
 
   async findLatestInquiryByContact(contact: InquiryContact) {
@@ -513,6 +588,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
       reel_id: booking.attribution?.reelId ?? "",
       campaign_id: booking.attribution?.campaignId ?? "",
       calendly_invitee_uri: booking.inviteeUri,
+      reference_number: booking.attribution?.referenceNumber ?? "",
     });
     return { wasReplay: false };
   }

@@ -892,6 +892,12 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; 
 .context-state h1 { max-width: 660px; margin: 0; font-size: clamp(2rem, 10vw, 3.4rem); line-height: 1.05; }
 .context-state p { max-width: 520px; color: var(--muted); line-height: 1.6; }
 .support-link { min-height: 44px; display: inline-flex; align-items: center; margin-top: 18px; padding: 0 18px; border: 1px solid var(--gold-dark); color: var(--ink); font-size: 13px; text-decoration: none; }
+.product-picker { min-height: 70svh; width: min(100% - 2 * var(--gutter), 760px); margin: 0 auto; padding: 40px 0 56px; text-align: center; }
+.product-picker h1 { margin: 0 0 28px; font-size: clamp(1.9rem, 8vw, 3rem); line-height: 1.08; }
+.picker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.picker-option { min-height: 56px; display: grid; place-items: center; padding: 14px 16px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); text-decoration: none; transition: border-color .2s var(--ease); }
+.picker-option:hover { border-color: var(--gold-dark); }
+.picker-name { font-size: 16px; line-height: 1.35; }
 .loading-shell { width: min(100% - 40px, 620px); margin: 40px auto; }
 .skeleton { background: linear-gradient(90deg, #f3f1ed, #fbfaf8, #f3f1ed); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 .logo-skeleton { width: 150px; height: 42px; margin: 0 auto; }

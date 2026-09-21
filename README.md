@@ -151,7 +151,12 @@ utm_term
 session_id
 landing_page_version
 idempotency_key
+reference_number
 ```
+
+`reference_number` is the same value as the Instagram FMS tab's
+`REFERENCE NUMBER`. The Bookings tab looks it up by `inquiry_id` (see
+[docs/BOOKINGS.md](docs/BOOKINGS.md)).
 
 `phone_normalized` identifies a customer, not an inquiry. A returning phone
 reuses its customer record and creates a new enquiry unless the exact

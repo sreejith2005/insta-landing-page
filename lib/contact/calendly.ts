@@ -10,3 +10,25 @@ export const CALENDLY_ORIGIN = "https://calendly.com";
 export function calendlyUrl(value: string | undefined) {
   return value && /^https:\/\/calendly\.com\/[^\s"'<>]+$/.test(value) ? value : undefined;
 }
+
+/**
+ * Calendly's UTM parameter that carries the enquiry into the booking. Calendly
+ * copies `utm_*` query parameters on a scheduling link into the webhook
+ * payload's `tracking` object, so the webhook can join on the inquiry ID
+ * instead of guessing from phone numbers.
+ */
+export const INQUIRY_UTM_PARAM = "utm_content";
+
+/** Inquiry IDs as issued by the repositories, e.g. `inq_<uuid>`. */
+export const INQUIRY_ID_PATTERN = /^inq_[A-Za-z0-9-]{1,76}$/;
+
+/**
+ * The scheduling link with the inquiry ID set as `utm_content`, replacing any
+ * `utm_content` the sheet link already had. Without an ID the link is unchanged.
+ */
+export function withInquiryTracking(url: string, inquiryId: string | undefined) {
+  if (!inquiryId) return url;
+  const tracked = new URL(url);
+  tracked.searchParams.set(INQUIRY_UTM_PARAM, inquiryId);
+  return tracked.toString();
+}

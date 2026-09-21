@@ -1,5 +1,5 @@
-import type { ProductMapping } from "@/types/funnel";
-import type { ProductRepository, ProductResolution } from "./contracts";
+import type { ProductMapping, ReelMapping } from "@/types/funnel";
+import type { IncomingResolution, ProductChoice, ProductRecord, ProductRepository, ProductResolution } from "./contracts";
 
 /**
  * Resolves the incoming mapping against the Product Master. The URL is never
@@ -37,4 +37,41 @@ export async function resolveProductContext(
       calendlyVideoUrl: record.calendlyVideoUrl,
     },
   };
+}
+
+/** Only HTTPS thumbnails reach the browser; anything else leaves the tile name-only. */
+function httpsUrl(value: string | undefined) {
+  if (!value) return undefined;
+  try {
+    return new URL(value).protocol === "https:" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function toChoice(record: ProductRecord): ProductChoice {
+  const imageUrl = httpsUrl(record.imageUrl);
+  return { productId: record.productId, productName: record.productName, ...(imageUrl ? { imageUrl } : {}) };
+}
+
+/**
+ * Entry point for the landing page. A link that names a product resolves
+ * exactly as `resolveProductContext` always has. A Reel-level link resolves
+ * through the Reel's active products: none is "missing", one resolves as if the
+ * link had named it, and several ask the customer to choose. A chosen product
+ * returns through the exact path, so the choice is re-verified on the server.
+ */
+export async function resolveIncomingContext(
+  context: ReelMapping & { productId?: string },
+  repository: ProductRepository,
+): Promise<IncomingResolution> {
+  const { productId, reelId, campaignId } = context;
+  if (productId !== undefined) return resolveProductContext({ ...context, productId }, repository);
+
+  const products = await repository.findActiveByReel({ reelId, campaignId });
+  if (products.length === 0) return { status: "missing" };
+  if (products.length === 1) {
+    return resolveProductContext({ productId: products[0].productId, reelId, campaignId }, repository);
+  }
+  return { status: "choose", products: products.map(toChoice) };
 }

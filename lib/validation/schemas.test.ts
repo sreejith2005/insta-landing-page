@@ -143,3 +143,36 @@ describe("eventSchema", () => {
     }
   });
 });
+
+describe("Reel-level links and the product picker", () => {
+  it("accepts an incoming context without a product, but still requires the Reel and campaign", () => {
+    expect(incomingContextSchema.parse({ reelId: "R456", campaignId: "BRIDAL26" }).productId).toBeUndefined();
+    expect(incomingContextSchema.safeParse({ productId: "RG5074", campaignId: "BRIDAL26" }).success).toBe(false);
+    expect(incomingContextSchema.safeParse({ productId: "RG5074", reelId: "R456" }).success).toBe(false);
+    expect(incomingContextSchema.safeParse({ productId: "bad id!", reelId: "R456", campaignId: "BRIDAL26" }).success).toBe(false);
+    expect(incomingContextSchema.safeParse({ productId: "", reelId: "R456", campaignId: "BRIDAL26" }).success).toBe(false);
+  });
+
+  it("still requires a product on every lead submission", () => {
+    const { productId, ...withoutProduct } = valid;
+    expect(productId).toBe("MKBR639");
+    expect(leadSubmissionSchema.safeParse(withoutProduct).success).toBe(false);
+  });
+
+  it("lets only product_picker_shown omit the product", () => {
+    const event = {
+      sessionId: valid.sessionId,
+      reelId: valid.reelId,
+      campaignId: valid.campaignId,
+      source: valid.source,
+      landingPageVersion: valid.landingPageVersion,
+    };
+    expect(eventSchema.parse({ ...event, eventName: "product_picker_shown" }).productId).toBeUndefined();
+    expect(eventSchema.safeParse({ ...event, eventName: "product_picker_selected" }).success).toBe(false);
+    expect(eventSchema.safeParse({ ...event, eventName: "landing_view" }).success).toBe(false);
+    expect(eventSchema.safeParse({ ...event, eventName: "form_submitted" }).success).toBe(false);
+    expect(
+      eventSchema.parse({ ...event, eventName: "product_picker_selected", productId: "RG5074" }).productId,
+    ).toBe("RG5074");
+  });
+});

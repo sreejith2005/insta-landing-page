@@ -9,6 +9,9 @@ export type ProductMapping = {
   campaignId: string;
 };
 
+/** A Reel-level link: the Reel and campaign, before any product is chosen. */
+export type ReelMapping = Omit<ProductMapping, "productId">;
+
 /** Where the customer entered the funnel. Restricted to an approved allowlist. */
 export type FunnelSource = "instagram" | "manychat" | "whatsapp" | "direct";
 
@@ -77,4 +80,6 @@ export type FunnelEventName =
   | "calendly_store_visit_opened"
   | "calendly_date_time_selected"
   | "calendly_event_scheduled"
-  | "whatsapp_contact_clicked";
+  | "whatsapp_contact_clicked"
+  | "product_picker_shown"
+  | "product_picker_selected";

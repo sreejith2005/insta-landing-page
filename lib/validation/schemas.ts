@@ -65,6 +65,9 @@ const dmFields = {
 
 export const incomingContextSchema = z.object({
   ...attributionFields,
+  // Absent on a Reel-level link: resolution then offers the Reel's active
+  // products, and a picked product comes back through the exact-match path.
+  productId: contextFields.productId.optional(),
   // A malformed handle or timestamp is dropped rather than costing the customer
   // the whole landing context.
   instagramUsername: dmFields.instagramUsername.catch(undefined),
@@ -133,17 +136,29 @@ export const eventNames = [
   "calendly_date_time_selected",
   "calendly_event_scheduled",
   "whatsapp_contact_clicked",
+  // Reel-level links whose Reel maps to several active products.
+  "product_picker_shown",
+  "product_picker_selected",
 ] as const;
 
-export const eventSchema = z.object({
-  eventName: z.enum(eventNames),
-  sessionId: z.uuid(),
-  inquiryId: z.string().max(80).optional(),
-  customerId: z.string().max(80).optional(),
-  ...attributionFields,
-  landingPageVersion: identifier,
-  metadata: z.record(z.string(), z.union([z.string().max(120), z.number(), z.boolean()])).optional(),
-});
+/** Fired before any product is chosen, so the only event allowed to omit `productId`. */
+const productlessEvents = new Set<(typeof eventNames)[number]>(["product_picker_shown"]);
+
+export const eventSchema = z
+  .object({
+    eventName: z.enum(eventNames),
+    sessionId: z.uuid(),
+    inquiryId: z.string().max(80).optional(),
+    customerId: z.string().max(80).optional(),
+    ...attributionFields,
+    productId: contextFields.productId.optional(),
+    landingPageVersion: identifier,
+    metadata: z.record(z.string(), z.union([z.string().max(120), z.number(), z.boolean()])).optional(),
+  })
+  .refine((event) => event.productId !== undefined || productlessEvents.has(event.eventName), {
+    path: ["productId"],
+    message: "productId is required for this event",
+  });
 
 export type LeadSubmissionInput = z.infer<typeof leadSubmissionSchema>;
 export type EventInput = z.infer<typeof eventSchema>;
@@ -171,6 +186,12 @@ export const calendlyInviteeCreatedSchema = z.object({
       .array(z.object({ question: z.string().max(1000), answer: z.string().max(2000) }))
       .max(30)
       .nullish(),
+    /**
+     * The scheduling link's `utm_*` parameters. The embed sets `utm_content` to
+     * the inquiry ID; bookings made outside the funnel send nulls. A malformed
+     * value is dropped (and the booking joined by phone) rather than rejected.
+     */
+    tracking: z.object({ utm_content: z.string().max(200).nullish() }).nullish().catch(null),
     scheduled_event: z.object({
       start_time: calendlyTimestamp,
       end_time: calendlyTimestamp,

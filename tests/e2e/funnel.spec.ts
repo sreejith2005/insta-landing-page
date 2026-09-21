@@ -190,3 +190,62 @@ test("nothing overflows a 360px phone, and the booking choice stacks full-width"
   await expect(page.getByRole("region", { name: "Book a store visit" })).toBeVisible();
   await expect.poll(overflows).toBe(false);
 });
+
+test.describe("Reel-level links", () => {
+  const pickerHeading = "Which piece were you asking about?";
+
+  test("a Reel with several active products asks which piece, then continues as that product's link", async ({ page }) => {
+    await isolate(page);
+    const events: Record<string, unknown>[] = [];
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/events")) events.push(request.postDataJSON());
+    });
+
+    await page.goto("/instagram?reel=R456&campaign=BRIDAL26&source=manychat&utm_source=instagram&u=ananya.s");
+    await expect(page.getByRole("heading", { name: pickerHeading })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Selected Gold Ring" })).toBeVisible();
+    await expect.poll(() => events.find((event) => event.eventName === "product_picker_shown")).toMatchObject({
+      reelId: "R456",
+      campaignId: "BRIDAL26",
+    });
+    expect(events.find((event) => event.eventName === "product_picker_shown")).not.toHaveProperty("productId");
+
+    await page.getByRole("link", { name: "Selected Diamond Solitaire Ring" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: /You found the piece/ })).toBeVisible();
+    const url = new URL(page.url());
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({
+      product: "RG5074",
+      reel: "R456",
+      campaign: "BRIDAL26",
+      source: "manychat",
+      utm_source: "instagram",
+      u: "ananya.s",
+    });
+    await expect.poll(() => events.find((event) => event.eventName === "product_picker_selected")).toMatchObject({
+      productId: "RG5074",
+    });
+    await expect.poll(() => events.find((event) => event.eventName === "context_resolved")).toMatchObject({
+      productId: "RG5074",
+    });
+  });
+
+  test("a Reel with one active product skips the picker", async ({ page }) => {
+    await page.goto("/instagram?reel=R123&campaign=RAKHI26");
+    await expect(page.getByRole("heading", { level: 1, name: /You found the piece/ })).toBeVisible();
+    await expect(page.getByText(pickerHeading)).toHaveCount(0);
+  });
+
+  test("a Reel with no active product is missing", async ({ page }) => {
+    await page.goto("/instagram?reel=R999&campaign=ARCHIVE");
+    await expect(page.getByRole("heading", { name: "We could not find this selection" })).toBeVisible();
+  });
+
+  test("a link that names a product never shows the picker, even on a multi-product Reel", async ({ page }) => {
+    await page.goto(secondProductUrl);
+    await expect(page.getByRole("heading", { level: 1, name: /You found the piece/ })).toBeVisible();
+    await expect(page.getByText(pickerHeading)).toHaveCount(0);
+    await page.goto("/instagram?product=RG5074&reel=R456&campaign=OTHER");
+    await expect(page.getByRole("heading", { name: "We could not find this selection" })).toBeVisible();
+    await expect(page.getByText(pickerHeading)).toHaveCount(0);
+  });
+});

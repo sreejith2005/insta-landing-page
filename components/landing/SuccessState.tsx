@@ -39,10 +39,12 @@ const calendlyMessages: Partial<Record<string, FunnelEventName>> = {
 function BookingOptions({
   booking,
   whatsappUrl,
+  inquiryId,
   track,
 }: {
   booking?: BookingLinks;
   whatsappUrl?: string;
+  inquiryId?: string;
   track?: TrackSuccessEvent;
 }) {
   const [open, setOpen] = useState<BookingType | null>(null);
@@ -115,6 +117,7 @@ function BookingOptions({
           id={`booking-${openAction.type}`}
           url={booking![openAction.key]!}
           label={openAction.label}
+          inquiryId={inquiryId}
         />
       ) : null}
     </div>
@@ -128,6 +131,7 @@ export function SuccessState({
   firstName,
   booking,
   whatsappUrl,
+  inquiryId,
   track,
 }: {
   isRepeatCustomer: boolean;
@@ -137,6 +141,8 @@ export function SuccessState({
   booking?: BookingLinks;
   /** Pre-built wa.me link; its pre-filled text is never shown on the page. */
   whatsappUrl?: string;
+  /** The accepted enquiry; passed to Calendly so the booking webhook can join on it. */
+  inquiryId?: string;
   track?: TrackSuccessEvent;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -166,7 +172,7 @@ export function SuccessState({
             <span aria-hidden="true">◆</span> {experienceCopy.successDiscountApplied}
           </p>
           <p className="success-contact">{contactCopy || experienceCopy.representativeContact}</p>
-          <BookingOptions booking={booking} whatsappUrl={whatsappUrl} track={track} />
+          <BookingOptions booking={booking} whatsappUrl={whatsappUrl} inquiryId={inquiryId} track={track} />
         </div>
       </section>
       <section className="band band-ivory success-next" aria-labelledby="next-heading">

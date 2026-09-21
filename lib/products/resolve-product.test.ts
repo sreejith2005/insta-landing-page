@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ProductRecord, ProductRepository } from "./contracts";
-import { resolveProductContext } from "./resolve-product";
+import { resolveIncomingContext, resolveProductContext } from "./resolve-product";
 
 const mapping: ProductRecord = {
   productId: "MK001",
@@ -16,7 +16,7 @@ const mapping: ProductRecord = {
 };
 
 function repository(record: ProductRecord | null): ProductRepository {
-  return { findByContext: async () => record };
+  return { findByContext: async () => record, findActiveByReel: async () => [] };
 }
 
 describe("resolveProductContext", () => {
@@ -85,5 +85,94 @@ describe("resolveProductContext", () => {
         repository({ ...mapping, active: false }),
       ),
     ).resolves.toEqual({ status: "inactive" });
+  });
+});
+
+describe("resolveIncomingContext", () => {
+  const reel = { reelId: "R456", campaignId: "BRIDAL26" };
+  const ring = (productId: string, extra: Partial<ProductRecord> = {}): ProductRecord => ({
+    ...mapping,
+    ...reel,
+    productId,
+    productName: `Ring ${productId}`,
+    ...extra,
+  });
+
+  /** A catalogue-backed fake: exact lookups and Reel lookups read the same records. */
+  function catalogue(records: ProductRecord[]) {
+    return {
+      findByContext: vi.fn(async (context: { productId: string; reelId: string; campaignId: string }) =>
+        records.find(
+          (record) =>
+            record.productId === context.productId &&
+            record.reelId === context.reelId &&
+            record.campaignId === context.campaignId,
+        ) ?? null,
+      ),
+      findActiveByReel: vi.fn(async (context: { reelId: string; campaignId: string }) =>
+        records.filter(
+          (record) => record.active && record.reelId === context.reelId && record.campaignId === context.campaignId,
+        ),
+      ),
+    } satisfies ProductRepository;
+  }
+
+  it("resolves a link that names a product exactly as before, never consulting the Reel", async () => {
+    const records = [ring("RG1"), ring("RG2"), ring("RG3", { active: false })];
+    const cases = [
+      { productId: "RG1", ...reel }, // resolved
+      { productId: "RG3", ...reel }, // inactive
+      { productId: "NOPE", ...reel }, // missing
+      { productId: "RG1", reelId: "R456", campaignId: "OTHER" }, // missing
+    ];
+    for (const context of cases) {
+      const repo = catalogue(records);
+      const expected = await resolveProductContext(context, catalogue(records));
+      await expect(resolveIncomingContext(context, repo)).resolves.toEqual(expected);
+      expect(repo.findActiveByReel).not.toHaveBeenCalled();
+      expect(repo.findByContext).toHaveBeenCalledTimes(1);
+      expect(repo.findByContext).toHaveBeenCalledWith(context);
+    }
+  });
+
+  it("keeps an invalid tuple invalid when a product is named", async () => {
+    const repo = { findByContext: async () => mapping, findActiveByReel: vi.fn(async () => [mapping]) };
+    await expect(resolveIncomingContext({ productId: "OTHER", reelId: "R101", campaignId: "RAKHI26" }, repo)).resolves.toEqual({
+      status: "invalid",
+    });
+    expect(repo.findActiveByReel).not.toHaveBeenCalled();
+  });
+
+  it("is missing when the Reel has no active product", async () => {
+    await expect(resolveIncomingContext(reel, catalogue([]))).resolves.toEqual({ status: "missing" });
+    await expect(resolveIncomingContext(reel, catalogue([ring("RG1", { active: false })]))).resolves.toEqual({
+      status: "missing",
+    });
+  });
+
+  it("resolves a single active product directly, identical to a link naming it", async () => {
+    const records = [ring("RG1", { imageUrl: "https://cdn.example.com/rg1.jpg" }), ring("RG2", { active: false })];
+    const direct = await resolveProductContext({ productId: "RG1", ...reel }, catalogue(records));
+    expect(direct.status).toBe("resolved");
+    await expect(resolveIncomingContext(reel, catalogue(records))).resolves.toEqual(direct);
+  });
+
+  it("asks the customer to choose between several active products, exposing only name and HTTPS image", async () => {
+    const records = [
+      ring("RG1", { imageUrl: "https://cdn.example.com/rg1.jpg", calendlyStoreUrl: "https://calendly.com/x" }),
+      ring("RG2", { imageUrl: "http://cdn.example.com/rg2.jpg" }),
+      ring("RG3", { imageUrl: "javascript:alert(1)" }),
+      ring("RG4", { active: false }),
+    ];
+    const repo = catalogue(records);
+    await expect(resolveIncomingContext(reel, repo)).resolves.toEqual({
+      status: "choose",
+      products: [
+        { productId: "RG1", productName: "Ring RG1", imageUrl: "https://cdn.example.com/rg1.jpg" },
+        { productId: "RG2", productName: "Ring RG2" },
+        { productId: "RG3", productName: "Ring RG3" },
+      ],
+    });
+    expect(repo.findByContext).not.toHaveBeenCalled();
   });
 });

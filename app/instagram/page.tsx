@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { BrandHeader } from "@/components/brand/BrandHeader";
 import { ContextState } from "@/components/landing/ContextState";
 import { FunnelExperience } from "@/components/landing/FunnelExperience";
+import { ProductPicker } from "@/components/landing/ProductPicker";
 import { TrustBar } from "@/components/landing/TrustBar";
 import { inquiryProofConfig, secondVideoConfig } from "@/config/experience";
 import { socialProof } from "@/config/social-proof";
@@ -15,7 +16,8 @@ import { calendlyUrl } from "@/lib/contact/calendly";
 import { whatsappContactUrl } from "@/lib/contact/whatsapp";
 import { resolveBrandVideo } from "@/lib/media/brand-video";
 import { repository } from "@/lib/providers/repository";
-import { resolveProductContext } from "@/lib/products/resolve-product";
+import { linkWithProduct } from "@/lib/products/picker-link";
+import { resolveIncomingContext } from "@/lib/products/resolve-product";
 import { loadInquiryProof, resolveTrustBar } from "@/lib/social-proof/inquiry-proof";
 import { resolveSocialProof } from "@/lib/social-proof/resolve-social-proof";
 import { incomingContextSchema } from "@/lib/validation/schemas";
@@ -54,10 +56,35 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
   let dataRepository: Awaited<ReturnType<typeof repository>>;
   try {
     dataRepository = await repository();
-    resolved = await resolveProductContext(attribution, dataRepository);
+    resolved = await resolveIncomingContext(attribution, dataRepository);
   } catch (error) {
     console.error("Product context resolution failed:", error);
     return <ContextState status="invalid" supportUrl={supportUrl} />;
+  }
+
+  // Several active products on a Reel-level link: the customer picks one, and
+  // the chosen link comes back through the exact product path above.
+  if (resolved.status === "choose") {
+    const { reelId, campaignId, source, utmSource, utmMedium, utmCampaign, utmContent, utmTerm } = attribution;
+    return (
+      <div className="shell">
+        <BrandHeader preview={runtime.isPreview} />
+        <ProductPicker
+          options={resolved.products.map((product) => ({ ...product, href: linkWithProduct(query, product.productId) }))}
+          context={{
+            reelId,
+            campaignId,
+            source,
+            utmSource,
+            utmMedium,
+            utmCampaign,
+            utmContent,
+            utmTerm,
+            landingPageVersion: runtime.landingPageVersion,
+          }}
+        />
+      </div>
+    );
   }
 
   if (resolved.status !== "resolved") {
@@ -84,12 +111,16 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
     return <ContextState status={status} supportUrl={supportUrl} />;
   }
 
+  // A named product is echoed back unchanged; a Reel with one active product
+  // takes that product's ID, so everything below sees a complete context.
+  const context = { ...attribution, productId: resolved.context.productId };
+
   // Server-side only: the customer receives a formatted count, never the
   // product/Reel/campaign filter used to compute it.
   const inquiryProof = await loadInquiryProof(
     { ...inquiryProofConfig, ...env.inquiryCount },
     dataRepository,
-    attribution,
+    context,
   );
   // Placeholders are resolved here, on the server, and refused in production.
   const proof = resolveSocialProof(
@@ -104,7 +135,7 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
       <TrustBar content={resolveTrustBar(inquiryProof, proof.trustMetrics, proof.placeholders.trustMetrics)} />
       <BrandHeader preview={runtime.isPreview} />
       <FunnelExperience
-        context={attribution}
+        context={context}
         dm={{ instagramUsername, dmReceivedAt }}
         runtime={{
           landingPageVersion: runtime.landingPageVersion,

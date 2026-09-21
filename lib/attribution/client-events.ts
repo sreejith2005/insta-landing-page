@@ -4,7 +4,8 @@ export type TrackingContext = UtmAttribution & {
   sessionId: string;
   inquiryId?: string;
   customerId?: string;
-  productId: string;
+  /** Omitted only by `product_picker_shown`, before a product is chosen. */
+  productId?: string;
   reelId: string;
   campaignId: string;
   source: FunnelSource;

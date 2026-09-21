@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { PreviewRepository } from "@/lib/providers/preview-repository";
 import type { CalendlyInviteeCreated } from "@/lib/validation/schemas";
-import { bookingTypeFor, inviteePhones, recordCalendlyBooking } from "./record-calendly-booking";
+import { bookingTypeFor, inviteePhones, recordCalendlyBooking, trackedInquiryId } from "./record-calendly-booking";
 
 const eventTypes = {
   videoCall: ["https://api.calendly.com/event_types/VIDEO"],
@@ -70,6 +70,16 @@ describe("inviteePhones", () => {
   });
 });
 
+describe("trackedInquiryId", () => {
+  it("reads an inquiry ID from utm_content and ignores anything else", () => {
+    expect(trackedInquiryId(invitee({ tracking: { utm_content: " inq_4b1e-9c " } }).payload)).toBe("inq_4b1e-9c");
+    expect(trackedInquiryId(invitee({ tracking: { utm_content: "position_2" } }).payload)).toBeUndefined();
+    expect(trackedInquiryId(invitee({ tracking: { utm_content: "inq_<script>" } }).payload)).toBeUndefined();
+    expect(trackedInquiryId(invitee({ tracking: null }).payload)).toBeUndefined();
+    expect(trackedInquiryId(invitee().payload)).toBeUndefined();
+  });
+});
+
 describe("recordCalendlyBooking", () => {
   it("logs the real scheduled time joined to the invitee's most recent enquiry", async () => {
     const repository = new PreviewRepository();
@@ -85,13 +95,45 @@ describe("recordCalendlyBooking", () => {
         inviteeName: "Ananya Shah",
         inviteeEmail: "ananya@example.com",
         inviteeUri: "https://api.calendly.com/scheduled_events/E1/invitees/I1",
-        attribution: { productId: "RG5074", reelId: "R123", campaignId: "RAKHI26" },
+        attribution: expect.objectContaining({ productId: "RG5074", reelId: "R123", campaignId: "RAKHI26" }),
       },
     ]);
 
     // Calendly retries are idempotent.
     expect(await recordCalendlyBooking(invitee(), repository, eventTypes)).toEqual({ wasReplay: true });
     expect(repository.snapshot().bookings).toHaveLength(1);
+  });
+
+  it("joins on the inquiry ID in utm_content ahead of a phone match", async () => {
+    const repository = new PreviewRepository();
+    const older = await repository.acceptLead(lead("9876543210", "MKBR639", "key-000000000001"), product("MKBR639"));
+    await repository.acceptLead(lead("9876543210", "RG5074", "key-000000000002"), product("RG5074"));
+
+    await recordCalendlyBooking(invitee({ tracking: { utm_content: older.inquiryId } }), repository, eventTypes);
+    const [booking] = repository.snapshot().bookings;
+    expect(booking.attribution).toMatchObject({ inquiryId: older.inquiryId, productId: "MKBR639" });
+    expect(booking.attribution?.referenceNumber).toMatch(/^MK-\d{4}-/);
+  });
+
+  it("joins on the inquiry ID even when Calendly has no phone for the invitee", async () => {
+    const repository = new PreviewRepository();
+    const accepted = await repository.acceptLead(lead("9876543210", "MKBR639", "key-000000000001"), product("MKBR639"));
+
+    await recordCalendlyBooking(
+      invitee({ text_reminder_number: null, questions_and_answers: null, tracking: { utm_content: accepted.inquiryId } }),
+      repository,
+      eventTypes,
+    );
+    expect(repository.snapshot().bookings[0].attribution).toMatchObject({ inquiryId: accepted.inquiryId });
+  });
+
+  it("falls back to the phone match when the tracked ID is absent, unknown or not an inquiry ID", async () => {
+    for (const tracking of [null, { utm_content: null }, { utm_content: "inq_unknown" }, { utm_content: "reel_42" }]) {
+      const repository = new PreviewRepository();
+      const accepted = await repository.acceptLead(lead("9876543210", "MKBR639", "key-000000000001"), product("MKBR639"));
+      await recordCalendlyBooking(invitee({ tracking }), repository, eventTypes);
+      expect(repository.snapshot().bookings[0].attribution).toMatchObject({ inquiryId: accepted.inquiryId });
+    }
   });
 
   it("still logs a booking it cannot join to an enquiry", async () => {

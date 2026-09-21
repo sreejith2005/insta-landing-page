@@ -11,9 +11,12 @@ import {
   fmsSourceLabels,
   GoogleSheetsRepository,
   headerRecord,
+  inquiryById,
   latestInquiryForContact,
   productFromMap,
   productFromRow,
+  productsForReel,
+  type Row,
   sheetTimestamp,
 } from "./google-sheets-repository";
 
@@ -208,6 +211,43 @@ describe("Reel_Product_Map resolution", () => {
     expect(productFromMap(inactiveProduct, map, { productId: "MKTEST001", reelId: "REEL001", campaignId: "TESTCAMPAIGN" })?.active).toBe(false);
   });
 
+  describe("productsForReel", () => {
+    const catalogue: Row[] = [
+      { product_id: "RG1", product_name: "Solitaire", image_url: "https://cdn.example.com/rg1.jpg" },
+      { product_id: "RG2", product_name: "Halo", active_status: "TRUE" },
+      { product_id: "RG3", product_name: "Switched-off product", active_status: "FALSE" },
+      { product_id: "RG4", product_name: "Switched-off mapping" },
+      { product_id: "RG6", product_name: "Other Reel" },
+    ];
+    const reelMap = [
+      { reel_id: "R456", campaign_id: "BRIDAL26", product_position: "2", product_id: "RG1", active_status: "TRUE" },
+      { reel_id: "R456", campaign_id: "BRIDAL26", product_position: "1", product_id: "RG2", active_status: "yes" },
+      { reel_id: "R456", campaign_id: "BRIDAL26", product_position: "3", product_id: "RG3", active_status: "TRUE" },
+      { reel_id: "R456", campaign_id: "BRIDAL26", product_position: "4", product_id: "RG4", active_status: "FALSE" },
+      { reel_id: "R456", campaign_id: "BRIDAL26", product_position: "5", product_id: "RG5", active_status: "TRUE" },
+      { reel_id: "R456", campaign_id: "BRIDAL26", product_position: "2", product_id: "RG1", active_status: "TRUE" },
+      { reel_id: "R456", campaign_id: "DIWALI26", product_position: "1", product_id: "RG6", active_status: "TRUE" },
+      { reel_id: "R999", campaign_id: "BRIDAL26", product_position: "1", product_id: "RG6", active_status: "TRUE" },
+    ];
+    const reel = { reelId: "R456", campaignId: "BRIDAL26" };
+
+    it("lists each active, catalogued product once, in product_position order", () => {
+      expect(productsForReel(catalogue, reelMap, reel).map((record) => record.productId)).toEqual(["RG2", "RG1"]);
+    });
+
+    it("returns exactly the record a link naming each product would resolve to", () => {
+      for (const record of productsForReel(catalogue, reelMap, reel)) {
+        expect(record).toEqual(productFromMap(catalogue, reelMap, { ...reel, productId: record.productId }));
+      }
+      expect(productsForReel(catalogue, reelMap, reel)[1].imageUrl).toBe("https://cdn.example.com/rg1.jpg");
+    });
+
+    it("is empty for an unknown Reel or campaign", () => {
+      expect(productsForReel(catalogue, reelMap, { reelId: "R000", campaignId: "BRIDAL26" })).toEqual([]);
+      expect(productsForReel(catalogue, reelMap, { reelId: "R456", campaignId: "NONE" })).toEqual([]);
+    });
+  });
+
   it("documents the map tab's canonical headers", () => {
     expect(defaultHeaders.reelMap).toEqual(["reel_id", "campaign_id", "product_position", "product_id", "active_status"]);
   });
@@ -355,6 +395,22 @@ describe("GoogleSheetsRepository Instagram FMS dual-write", () => {
     expect(inquiry.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+05:30$/);
     expect(fms.Timestamp).toBe(fmsDateTime(new Date(inquiry.created_at)));
     expect(inquiry.source).toBe("manychat");
+    // The same reference is kept on Inquiries, so a booking can find it by inquiry ID.
+    expect(inquiry.reference_number).toBe("MK-2609-0042");
+    expect(inquiry.inquiry_id).toMatch(/^inq_/);
+  });
+
+  it("keeps the FMS tab at exactly the team's 15 headers", () => {
+    expect(defaultHeaders.instagramFms).toHaveLength(15);
+    expect(defaultHeaders.instagramFms).not.toContain("reference_number");
+    expect(defaultHeaders.instagramFms.some((header) => /booking|scheduled|calendly/i.test(header))).toBe(false);
+  });
+
+  it("keeps the reference on Inquiries even when the FMS write fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { repository, appended } = repositoryWith({ fmsTab: "Instagram_FMS", failTab: "Instagram_FMS" });
+    await repository.acceptLead(lead, product);
+    expect(appended[1].row.reference_number).toBe("MK-2609-0042");
   });
 
   it("keeps Inquiries' phone as-is and writes a 10-digit number to FMS", async () => {
@@ -391,15 +447,25 @@ describe("GoogleSheetsRepository Instagram FMS dual-write", () => {
 });
 
 describe("latestInquiryForContact", () => {
-  const rows = [
+  const rows: Row[] = [
     { phone_normalized: "9876543210", product_id: "MK001", reel_id: "R1", campaign_id: "C1", created_at: "2026-09-10T10:00:00.000+05:30" },
-    { phone_normalized: "9876543210", product_id: "MK002", reel_id: "R2", campaign_id: "C2", created_at: "2026-09-12T10:00:00.000+05:30" },
+    {
+      inquiry_id: "inq_2",
+      reference_number: "MK-2609-0002",
+      phone_normalized: "9876543210",
+      product_id: "MK002",
+      reel_id: "R2",
+      campaign_id: "C2",
+      created_at: "2026-09-12T10:00:00.000+05:30",
+    },
     { phone_normalized: "9876543210", product_id: "MK003", reel_id: "R3", campaign_id: "C3", created_at: "2026-09-11T10:00:00.000+05:30" },
     { phone_normalized: "9123456789", product_id: "MK004", reel_id: "R4", campaign_id: "C4", created_at: "2026-09-15T10:00:00.000+05:30" },
   ];
 
   it("returns the most recent inquiry for a matching phone", () => {
     expect(latestInquiryForContact(rows, { email: "a@example.com", phones: ["9876543210"] })).toEqual({
+      inquiryId: "inq_2",
+      referenceNumber: "MK-2609-0002",
       productId: "MK002",
       reelId: "R2",
       campaignId: "C2",
@@ -417,6 +483,31 @@ describe("latestInquiryForContact", () => {
   it("returns null without a match", () => {
     expect(latestInquiryForContact(rows, { email: "x@example.com", phones: ["9000000001"] })).toBeNull();
     expect(latestInquiryForContact(rows, { phones: [] })).toBeNull();
+  });
+});
+
+describe("inquiryById", () => {
+  const rows = [
+    { inquiry_id: "inq_1", reference_number: "MK-2609-0001", product_id: "MK001", reel_id: "R1", campaign_id: "C1" },
+    { inquiry_id: " inq_2 ", reference_number: "", product_id: "MK002", reel_id: "R2", campaign_id: "C2" },
+  ];
+
+  it("finds the inquiry and its reference number by ID", () => {
+    expect(inquiryById(rows, "inq_1")).toEqual({
+      inquiryId: "inq_1",
+      referenceNumber: "MK-2609-0001",
+      productId: "MK001",
+      reelId: "R1",
+      campaignId: "C1",
+    });
+  });
+
+  it("gives a blank reference for inquiries logged before it was stored", () => {
+    expect(inquiryById(rows, "inq_2")).toMatchObject({ inquiryId: "inq_2", referenceNumber: "", productId: "MK002" });
+  });
+
+  it("returns null for an unknown ID", () => {
+    expect(inquiryById(rows, "inq_9")).toBeNull();
   });
 });
 
@@ -457,7 +548,13 @@ describe("GoogleSheetsRepository bookings", () => {
       inviteeName: "Ananya Shah",
       inviteeEmail: "ananya@example.com",
       inviteeUri: "https://api.calendly.com/scheduled_events/E1/invitees/I1",
-      attribution: { productId: "MK001", reelId: "R1", campaignId: "C1" },
+      attribution: {
+        inquiryId: "inq_1",
+        referenceNumber: "MK-2609-0042",
+        productId: "MK001",
+        reelId: "R1",
+        campaignId: "C1",
+      },
     };
 
     expect(await repository.recordBooking(booking)).toEqual({ wasReplay: false });
@@ -473,6 +570,50 @@ describe("GoogleSheetsRepository bookings", () => {
       reel_id: "R1",
       campaign_id: "C1",
       calendly_invitee_uri: booking.inviteeUri,
+      reference_number: "MK-2609-0042",
+    });
+  });
+
+  it("leaves reference_number blank for a booking it could not join", async () => {
+    const tabs: Record<string, string[][]> = { Bookings: [[...defaultHeaders.bookings]] };
+    const client = {
+      spreadsheets: {
+        values: {
+          get: vi.fn(async () => ({ data: { values: tabs.Bookings } })),
+          append: vi.fn(async ({ requestBody }: { requestBody: { values: string[][] } }) => {
+            tabs.Bookings.push(requestBody.values[0]);
+            return {};
+          }),
+        },
+      },
+    };
+    const repository = new GoogleSheetsRepository({
+      serviceAccountEmail: "svc@example.iam.gserviceaccount.com",
+      privateKey: "test-key",
+      spreadsheetId: "sheet-id",
+      sheets: {
+        products: "Products",
+        reelMap: undefined,
+        customers: "Customers",
+        inquiries: "Inquiries",
+        events: "Events",
+        instagramFms: undefined,
+        bookings: "Bookings",
+      },
+    });
+    Object.assign(repository, { client });
+    await repository.recordBooking({
+      bookingType: "unknown",
+      scheduledStart: "2026-09-20T05:30:00Z",
+      scheduledEnd: "2026-09-20T06:00:00Z",
+      inviteeName: "Walk-in",
+      inviteeEmail: "walkin@example.com",
+      inviteeUri: "https://api.calendly.com/scheduled_events/E2/invitees/I2",
+      attribution: null,
+    });
+    expect(headerRecord([...defaultHeaders.bookings], tabs.Bookings[1])).toMatchObject({
+      product_id: "",
+      reference_number: "",
     });
   });
 });

@@ -1,17 +1,33 @@
 import { randomUUID } from "node:crypto";
 
 import { previewProducts } from "@/data/preview-products";
-import type { BookingRecord, FunnelRepository, InquiryContact, InquiryCountFilter } from "@/lib/leads/contracts";
+import type {
+  BookingRecord,
+  FunnelRepository,
+  InquiryContact,
+  InquiryCountFilter,
+  InquiryMatch,
+} from "@/lib/leads/contracts";
+import { createReferenceNumberSource } from "@/lib/leads/reference-number";
 import type { ProductRecord } from "@/lib/products/contracts";
 import type { EventInput, LeadSubmissionInput } from "@/lib/validation/schemas";
-import type { ProductMapping, ResolvedAttributionContext } from "@/types/funnel";
+import type { ProductMapping, ReelMapping, ResolvedAttributionContext } from "@/types/funnel";
 
 type Inquiry = LeadSubmissionInput & {
   productName: string;
   inquiryId: string;
   customerId: string;
+  referenceNumber: string;
   createdAt: string;
 };
+
+const match = (inquiry: Inquiry): InquiryMatch => ({
+  inquiryId: inquiry.inquiryId,
+  referenceNumber: inquiry.referenceNumber,
+  productId: inquiry.productId,
+  reelId: inquiry.reelId,
+  campaignId: inquiry.campaignId,
+});
 
 export class PreviewRepository implements FunnelRepository {
   private readonly customers = new Map<string, string>();
@@ -22,6 +38,7 @@ export class PreviewRepository implements FunnelRepository {
   >();
   private readonly events: EventInput[] = [];
   private readonly bookings: BookingRecord[] = [];
+  private readonly referenceNumber = createReferenceNumberSource();
 
   constructor(private readonly options: { failWrites?: boolean; products?: ProductRecord[] } = {}) {}
 
@@ -34,6 +51,16 @@ export class PreviewRepository implements FunnelRepository {
           product.campaignId === context.campaignId,
       ) ?? null
     );
+  }
+
+  async findActiveByReel(context: ReelMapping) {
+    return (this.options.products ?? previewProducts)
+      .filter(
+        (product) => product.active && product.reelId === context.reelId && product.campaignId === context.campaignId,
+      )
+      .sort(
+        (a, b) => (a.productPosition ?? Number.POSITIVE_INFINITY) - (b.productPosition ?? Number.POSITIVE_INFINITY),
+      );
   }
 
   async acceptLead(input: LeadSubmissionInput, { productName }: ResolvedAttributionContext) {
@@ -53,6 +80,7 @@ export class PreviewRepository implements FunnelRepository {
       ...input,
       productName,
       ...result,
+      referenceNumber: await this.referenceNumber(),
       createdAt: new Date().toISOString(),
     });
     this.idempotency.set(input.idempotencyKey, result);
@@ -75,10 +103,15 @@ export class PreviewRepository implements FunnelRepository {
     }).length;
   }
 
+  async findInquiryById(inquiryId: string) {
+    const inquiry = this.inquiries.find((candidate) => candidate.inquiryId === inquiryId);
+    return inquiry ? match(inquiry) : null;
+  }
+
   /** Preview inquiries carry no email, so only phones match. Latest wins. */
   async findLatestInquiryByContact(contact: InquiryContact) {
-    const match = this.inquiries.findLast((inquiry) => contact.phones.includes(inquiry.mobileNumber));
-    return match ? { productId: match.productId, reelId: match.reelId, campaignId: match.campaignId } : null;
+    const inquiry = this.inquiries.findLast((candidate) => contact.phones.includes(candidate.mobileNumber));
+    return inquiry ? match(inquiry) : null;
   }
 
   async recordBooking(booking: BookingRecord) {

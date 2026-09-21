@@ -1,4 +1,5 @@
 import type { ServerEnv } from "@/lib/config/env";
+import { INQUIRY_ID_PATTERN } from "@/lib/contact/calendly";
 import type { BookingType, FunnelRepository } from "@/lib/leads/contracts";
 import { normalizeIndianPhone } from "@/lib/phone/normalize-indian-phone";
 import type { CalendlyInviteeCreated } from "@/lib/validation/schemas";
@@ -33,20 +34,28 @@ export function inviteePhones(payload: CalendlyInviteeCreated["payload"]): strin
   return [...phones];
 }
 
+/** The inquiry ID the funnel's embed put in `utm_content`, if it looks like one. */
+export function trackedInquiryId(payload: CalendlyInviteeCreated["payload"]) {
+  const value = payload.tracking?.utm_content?.trim();
+  return value && INQUIRY_ID_PATTERN.test(value) ? value : undefined;
+}
+
 /**
  * Logs a confirmed Calendly booking with its real scheduled time, joined to
- * the most recent enquiry from the same invitee. An unmatched booking is still
- * logged, with blank product/Reel/campaign.
+ * its enquiry: by the inquiry ID the embed passed as `utm_content`, or, for a
+ * booking made outside the funnel (or an ID that matches no inquiry), the
+ * invitee's most recent enquiry by phone. An unmatched booking is still
+ * logged, with blank product/Reel/campaign and reference number.
  */
 export async function recordCalendlyBooking(
   { payload }: CalendlyInviteeCreated,
-  repository: Pick<FunnelRepository, "findLatestInquiryByContact" | "recordBooking">,
+  repository: Pick<FunnelRepository, "findInquiryById" | "findLatestInquiryByContact" | "recordBooking">,
   eventTypes: EventTypes,
 ) {
-  const attribution = await repository.findLatestInquiryByContact({
-    email: payload.email,
-    phones: inviteePhones(payload),
-  });
+  const inquiryId = trackedInquiryId(payload);
+  const attribution =
+    (inquiryId ? await repository.findInquiryById(inquiryId) : null) ??
+    (await repository.findLatestInquiryByContact({ email: payload.email, phones: inviteePhones(payload) }));
   return repository.recordBooking({
     bookingType: bookingTypeFor(payload.scheduled_event.event_type, eventTypes),
     scheduledStart: payload.scheduled_event.start_time,
