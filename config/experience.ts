@@ -25,7 +25,6 @@ export const experienceCopy = {
   proofCtaButton: "Unlock My 30% Benefit",
   midCtaText: "Claim My Making-Charge Benefit",
   stickyCtaText: "Unlock 30% Benefit",
-  finalCtaText: "Return to My Benefit",
   ctaMicrocopy: "Four details · Takes under a minute",
   offerCtaText: OFFER_CTA_TEXT,
   formEyebrow: "Your private benefit is ready",
@@ -91,7 +90,7 @@ export const inquiryProofConfig = {
  */
 export const trustBarConfig = {
   label: "MK Jewels in numbers",
-  maxStats: 3,
+  maxStats: 4,
 } as const;
 
 /**
@@ -127,26 +126,6 @@ export const secondVideoConfig = {
   aspectRatio: "16 / 9",
 } as const;
 
-/**
- * Reasons shown in the "why" section. These describe the enquiry service this
- * page actually provides. Add brand claims (craftsmanship, years, stores) only
- * once MK Jewels has approved them.
- */
-export const whyReasons = [
-  {
-    title: "A jewellery expert, personally",
-    text: "A member of the MK Jewels team contacts you directly, rather than leaving you to browse alone.",
-  },
-  {
-    title: "Your selection, already known",
-    text: "Your enquiry is linked to the piece you discovered on Instagram, so there is nothing to describe again.",
-  },
-  {
-    title: "A benefit reserved for Instagram",
-    text: "Enquiries from this private link can unlock up to 30% off making charges on eligible jewellery.",
-  },
-] as const;
-
 /** The three-step concierge journey explained before the form. */
 export const journeySteps = [
   { label: "Unlock", title: "Unlock your making-charge benefit", text: "Share four simple details. No payment is needed to enquire." },
@@ -158,12 +137,6 @@ export const successSteps = [
   { title: "Your enquiry is received", text: "It is recorded with the piece you selected on Instagram." },
   { title: "Our team reviews your selection", text: "An MK Jewels jewellery expert prepares to assist you." },
   { title: "We contact you personally", text: "A representative reaches you on the mobile number you shared." },
-] as const;
-
-export const reassurancePoints = [
-  { title: "No payment to enquire", text: "Registering your interest is free and without obligation." },
-  { title: "Only four details", text: "Name, mobile number, PIN code and city. Nothing more." },
-  { title: "Private by design", text: "Your details are used only by MK Jewels for this enquiry." },
 ] as const;
 
 /**

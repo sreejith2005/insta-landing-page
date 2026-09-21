@@ -16,15 +16,14 @@ export type ResolvedSocialProof = {
 };
 
 function usableReviews(content: GoogleReviewsContent | undefined) {
-  if (!content?.enabled || !content.rating || !content.reviewCount) return null;
-  const reviews = content.reviews.filter((review) => review.name.trim() && review.text.trim());
+  if (!content?.enabled) return null;
+  const reviews = content.reviews.filter((review) => review.author.trim() && review.text.trim());
   return reviews.length ? { ...content, reviews } : null;
 }
 
+/** A testimonial is its film, so the film is the only thing it cannot go without. */
 function usableTestimonials(items: readonly Testimonial[]) {
-  return items.filter(
-    (item) => item.name.trim() && item.quote.trim() && (item.type === "text" || Boolean(item.asset)),
-  );
+  return items.filter((item) => item.asset.trim());
 }
 
 /**
@@ -46,12 +45,15 @@ export function resolveSocialProof(
 
   const useMetricPlaceholder = allow && !approvedMetrics.length;
   const useReviewPlaceholder = allow && !approvedReviews;
-  const useStoryPlaceholder = allow && !approvedStories.length;
+  // There are no stand-in customer films, so this stays false: the flag means
+  // "what is on the page is a placeholder", never "the section is empty".
+  const storyPlaceholders = allow ? usableTestimonials(placeholders.testimonials) : [];
+  const useStoryPlaceholder = !approvedStories.length && storyPlaceholders.length > 0;
 
   return {
     trustMetrics: useMetricPlaceholder ? placeholders.trustMetrics : approvedMetrics,
     googleReviews: useReviewPlaceholder ? usableReviews(placeholders.googleReviews) : approvedReviews,
-    testimonials: useStoryPlaceholder ? usableTestimonials(placeholders.testimonials) : approvedStories,
+    testimonials: useStoryPlaceholder ? storyPlaceholders : approvedStories,
     mediaProof: approved.mediaProof.filter((item) => item.src && item.alt),
     placeholders: {
       trustMetrics: useMetricPlaceholder,

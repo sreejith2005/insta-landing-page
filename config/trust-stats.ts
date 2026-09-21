@@ -13,4 +13,9 @@
  */
 import type { TrustMetric } from "./social-proof";
 
-export const trustStats: readonly TrustMetric[] = [];
+export const trustStats: readonly TrustMetric[] = [
+  { label: "Happy Customers", value: "2,00,000+" },
+  { label: "Unique Designs", value: "5,000+" },
+  { label: "Years of Trust", value: "27+" },
+  { label: "Stores", value: "5" },
+];

@@ -17,9 +17,9 @@ const approved: SocialProofContent = {
     enabled: true,
     rating: "4.7",
     reviewCount: "312",
-    reviews: [{ name: "Approved Reviewer", rating: 5, text: "Approved review." }],
+    reviews: [{ author: "Approved Reviewer", profileUrl: null, rating: 5, text: "Approved review." }],
   },
-  testimonials: [{ type: "text", name: "Approved Customer", quote: "Approved story." }],
+  testimonials: [{ type: "video", name: "Approved Customer", quote: "Approved story.", asset: "/testimonials/one.mp4" }],
   mediaProof: [],
 };
 
@@ -36,15 +36,17 @@ describe("resolveSocialProof", () => {
     const resolved = resolveSocialProof(empty, placeholders, true, "development");
     expect(resolved.trustMetrics).toHaveLength(4);
     expect(resolved.googleReviews?.reviews).toHaveLength(3);
-    expect(resolved.testimonials.length).toBeGreaterThan(0);
-    expect(resolved.placeholders).toEqual({ trustMetrics: true, googleReviews: true, testimonials: true });
+    // No placeholder customer films exist, so that section simply stays empty
+    // rather than being filled with a stand-in and labelled as one.
+    expect(resolved.testimonials).toEqual([]);
+    expect(resolved.placeholders).toEqual({ trustMetrics: true, googleReviews: true, testimonials: false });
     expect(resolveSocialProof(empty, placeholders, false, "development").googleReviews).toBeNull();
   });
 
   it("prefers approved content over placeholders", () => {
     const resolved = resolveSocialProof(approved, placeholders, true, "development");
     expect(resolved.trustMetrics).toEqual(approved.trustMetrics);
-    expect(resolved.googleReviews?.reviews[0].name).toBe("Approved Reviewer");
+    expect(resolved.googleReviews?.reviews[0].author).toBe("Approved Reviewer");
     expect(resolved.testimonials[0].name).toBe("Approved Customer");
     expect(resolved.placeholders).toEqual({ trustMetrics: false, googleReviews: false, testimonials: false });
   });
@@ -55,12 +57,12 @@ describe("resolveSocialProof", () => {
     expect(resolved.testimonials).toHaveLength(1);
   });
 
-  it("hides disabled or incomplete Google review data and asset-less media testimonials", () => {
+  it("hides disabled or incomplete Google review data and film-less testimonials", () => {
     const resolved = resolveSocialProof(
       {
         ...empty,
         googleReviews: { ...approved.googleReviews, enabled: false },
-        testimonials: [{ type: "image", name: "No Asset", quote: "Missing image." }],
+        testimonials: [{ type: "video", name: "No Film", quote: "Missing film.", asset: "  " }],
       },
       placeholders,
       false,
@@ -68,6 +70,51 @@ describe("resolveSocialProof", () => {
     );
     expect(resolved.googleReviews).toBeNull();
     expect(resolved.testimonials).toEqual([]);
+  });
+
+  it("shows reviews without an aggregate rating or review count", () => {
+    const { rating: _rating, reviewCount: _count, ...withoutAggregate } = approved.googleReviews;
+    void _rating;
+    void _count;
+    const resolved = resolveSocialProof({ ...empty, googleReviews: withoutAggregate }, placeholders, false, "production");
+    expect(resolved.googleReviews?.reviews).toHaveLength(1);
+  });
+
+  it("drops reviews missing an author or text", () => {
+    const resolved = resolveSocialProof(
+      {
+        ...empty,
+        googleReviews: {
+          enabled: true,
+          reviews: [
+            { author: " ", profileUrl: null, text: "No author." },
+            { author: "No Text", profileUrl: null, text: "" },
+          ],
+        },
+      },
+      placeholders,
+      false,
+      "production",
+    );
+    expect(resolved.googleReviews).toBeNull();
+  });
+
+  it("resolves the shipped reviews and trust stats as approved content, never placeholders", () => {
+    for (const env of ["production", "development"]) {
+      const resolved = resolveSocialProof(socialProof, placeholders, true, env);
+      expect(resolved.trustMetrics).toEqual([
+        { label: "Happy Customers", value: "2,00,000+" },
+        { label: "Unique Designs", value: "5,000+" },
+        { label: "Years of Trust", value: "27+" },
+        { label: "Stores", value: "5" },
+      ]);
+      expect(resolved.googleReviews?.reviews.map((review) => review.author)).toEqual([
+        "Sneha Sunderdas",
+        "Rahul",
+        "Farha Siddiqui",
+      ]);
+      expect(resolved.placeholders).toEqual({ trustMetrics: false, googleReviews: false, testimonials: false });
+    }
   });
 
   it("ships with no approved content that could be mistaken for placeholders", () => {

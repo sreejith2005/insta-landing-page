@@ -36,9 +36,11 @@ test("valid context captures a lead and shows only generic confirmation", async 
   ).toBeVisible();
   await expect(page.getByText("Thank you, Ananya.")).toBeVisible();
   await expect(page.getByText(/representative will contact you shortly/i)).toBeVisible();
-  await expect(
-    page.getByText(/MKBR639|Gold Open-Back|Purity|Store Visit|Video Consultation|WhatsApp|Callback/i),
-  ).toHaveCount(0);
+  await expect(page.getByText(/MKBR639|Gold Open-Back|Purity|Callback/i)).toHaveCount(0);
+  // The booking choice is offered by name; the piece behind it still is not.
+  // (The wa.me href carries the product id on purpose — see SuccessState's
+  // own test that its pre-filled text never reaches the page.)
+  await expect(page.locator(".success-choice > *")).toHaveCount(3);
 });
 
 test("a repeat phone creates another enquiry without exposing the new product", async ({ page }) => {
@@ -101,7 +103,8 @@ test("the mobile sticky call to action never covers the form", async ({ page }) 
   const sticky = page.locator(".sticky-cta");
   await expect(sticky).toHaveAttribute("data-visible", "false");
 
-  await page.evaluate(() => window.scrollTo(0, document.querySelector(".why-band")!.getBoundingClientRect().top + window.scrollY + 200));
+  // Below the form, where the bar is the only way back to it.
+  await page.locator(".stories-band").scrollIntoViewIfNeeded();
   await expect(sticky).toHaveAttribute("data-visible", "true");
 
   await page.locator("#enquire").scrollIntoViewIfNeeded();
@@ -140,4 +143,50 @@ test("development placeholders are labelled wherever they appear", async ({ page
   for (const section of await page.locator("[data-placeholder]").all()) {
     await expect(section.getByText(/Development placeholder · not approved for production/)).toBeVisible();
   }
+});
+
+test("nothing overflows a 360px phone, and the booking choice stacks full-width", async ({ page }) => {
+  await isolate(page);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto(validUrl);
+
+  const overflows = () =>
+    page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+
+  // Pre-submit: trust bar, hero film, form and the testimonial strip.
+  await expect.poll(overflows).toBe(false);
+  // The films are a swipeable strip, so the strip scrolls sideways, not the page.
+  const strip = page.locator(".stories-strip");
+  await strip.scrollIntoViewIfNeeded();
+  expect(await strip.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+  await expect.poll(overflows).toBe(false);
+
+  await page.locator(`#${"enquire"}`).scrollIntoViewIfNeeded();
+  await submitLead(page, "9822223333");
+  await expect(page.getByRole("heading", { name: /benefit is unlocked/i })).toBeVisible();
+
+  // All three choices are offered, stacked one per row and full width.
+  const choices = page.locator(".success-choice > *");
+  await expect(choices).toHaveCount(3);
+  const boxes = await choices.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const { width, left, top } = node.getBoundingClientRect();
+      return { width, left, top };
+    }),
+  );
+  expect(new Set(boxes.map((box) => Math.round(box.top))).size).toBe(3);
+  for (const box of boxes) expect(box.width).toBeGreaterThan(280);
+
+  // Choosing one mounts a single scheduler that fits the viewport.
+  await page.getByRole("button", { name: "Book a video call demo" }).click();
+  const embed = page.locator(".calendly-embed");
+  await expect(embed).toHaveCount(1);
+  expect(await embed.evaluate((node) => node.getBoundingClientRect().width)).toBeLessThanOrEqual(360);
+  await expect.poll(overflows).toBe(false);
+
+  // Swapping replaces it rather than opening a second one.
+  await page.getByRole("button", { name: "Book a store visit" }).click();
+  await expect(page.locator(".calendly-embed")).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Book a store visit" })).toBeVisible();
+  await expect.poll(overflows).toBe(false);
 });

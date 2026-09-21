@@ -23,7 +23,7 @@ Supersedes the earlier sparse layout. QA screenshots: `docs/design/qa-2026-09-17
   (enquiry pill above headline) → dark brand-film section → white trust metrics
   → warm "why" → dark CTA → white Google reviews → ivory testimonials →
   (media proof) → dark "Still thinking" CTA → white three steps → warm form →
-  dark reassurance → footer. With a film, mobile shows the film and its CTA in
+  footer. With a film, mobile shows the film and its CTA in
   place of the hero card and hero CTA.
 - Palette additions: charcoal `#12110e`, ivory `#f8f4ed`, warm `#f0e8db`,
   gold text on light `#86683c` (AA on ivory).

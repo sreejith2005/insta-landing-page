@@ -13,9 +13,11 @@ export type BookingType = "video_call" | "store_visit";
 export type TrackSuccessEvent = (eventName: FunnelEventName, metadata?: { bookingType: BookingType }) => void;
 
 const bookingActions = [
-  { type: "video_call", key: "videoUrl", label: "Book a video call", openedEvent: "calendly_video_call_opened" },
+  { type: "video_call", key: "videoUrl", label: "Book a video call demo", openedEvent: "calendly_video_call_opened" },
   { type: "store_visit", key: "storeUrl", label: "Book a store visit", openedEvent: "calendly_store_visit_opened" },
 ] as const;
+
+const WHATSAPP_LABEL = "Chat on WhatsApp";
 
 /**
  * Calendly's postMessage events → our event names. They carry no date or time,
@@ -27,9 +29,12 @@ const calendlyMessages: Partial<Record<string, FunnelEventName>> = {
 };
 
 /**
- * Post-enquiry next steps. Each booking button appears only when the product
- * has that Calendly link, and reveals Calendly's inline scheduler; WhatsApp
- * appears only when a CRM number is configured. Nothing here names the piece.
+ * Post-enquiry next steps, as a choice rather than an automatic embed: the
+ * customer picks one of up to three actions and only then is a scheduler
+ * mounted. Each booking button appears only when the product has that Calendly
+ * link, and WhatsApp appears only when a CRM number is configured — WhatsApp is
+ * an ordinary link, so choosing it neither opens nor closes a scheduler.
+ * Nothing here names the piece.
  */
 function BookingOptions({
   booking,
@@ -41,6 +46,21 @@ function BookingOptions({
   track?: TrackSuccessEvent;
 }) {
   const [open, setOpen] = useState<BookingType | null>(null);
+  // Read inside the mount effect so a fresh `track` identity never re-fires an
+  // event. Declared first, so it is up to date before that effect runs.
+  const latestTrack = useRef(track);
+  useEffect(() => {
+    latestTrack.current = track;
+  });
+
+  // The "opened" event belongs to the scheduler actually appearing, not to the
+  // click: it fires as the widget mounts, and again when the customer swaps to
+  // the other option. Closing the open one fires nothing.
+  useEffect(() => {
+    if (!open) return;
+    const action = bookingActions.find((candidate) => candidate.type === open);
+    if (action) latestTrack.current?.(action.openedEvent, { bookingType: open });
+  }, [open]);
 
   // Only one scheduler is open at a time, so it identifies the booking type.
   useEffect(() => {
@@ -61,7 +81,7 @@ function BookingOptions({
 
   return (
     <div className="success-booking">
-      <div className="success-booking-actions">
+      <div className="success-booking-actions success-choice">
         {actions.map((action) => (
           <button
             type="button"
@@ -69,11 +89,8 @@ function BookingOptions({
             key={action.type}
             aria-expanded={open === action.type}
             aria-controls={open === action.type ? `booking-${action.type}` : undefined}
-            onClick={() => {
-              if (open === action.type) return setOpen(null);
-              setOpen(action.type);
-              track?.(action.openedEvent, { bookingType: action.type });
-            }}
+            // Tracking happens when the widget mounts, in the effect above.
+            onClick={() => setOpen(open === action.type ? null : action.type)}
           >
             {action.label}
           </button>
@@ -87,7 +104,7 @@ function BookingOptions({
             // Sent with `keepalive`, so it survives the page losing focus to WhatsApp.
             onClick={() => track?.("whatsapp_contact_clicked")}
           >
-            Chat with us on WhatsApp
+            {WHATSAPP_LABEL}
             <span className="cta-arrow" aria-hidden="true">↗</span>
           </a>
         ) : null}

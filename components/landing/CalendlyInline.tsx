@@ -6,7 +6,12 @@ import { useCallback, useRef } from "react";
 import { CALENDLY_WIDGET_SRC } from "@/lib/contact/calendly";
 
 type CalendlyWidget = {
-  initInlineWidget(options: { url: string; parentElement: HTMLElement }): void;
+  initInlineWidget(options: {
+    url: string;
+    parentElement: HTMLElement;
+    /** Calendly's own fluid mode: the scheduler tracks the parent's width. */
+    resize?: boolean;
+  }): void;
 };
 
 declare global {
@@ -27,7 +32,10 @@ export function CalendlyInline({ url, id, label }: { url: string; id: string; la
     const parent = container.current;
     if (!parent || !window.Calendly) return;
     parent.replaceChildren();
-    window.Calendly.initInlineWidget({ url, parentElement: parent });
+    // `resize: true` is Calendly's responsive mode: the embed follows the
+    // container's width instead of its own 320px minimum, which is what keeps
+    // a 360px viewport from scrolling sideways.
+    window.Calendly.initInlineWidget({ url, parentElement: parent, resize: true });
   }, [url]);
 
   return (

@@ -45,15 +45,36 @@ for (const viewport of viewports) {
     await expect(page.getByRole("heading", { name: /benefit is unlocked/i })).toBeVisible();
     await noOverflow(page, `confirmation at ${size}`);
 
+    // A control inside a horizontal carousel (the review track, the customer
+    // film strip) is off to one side on purpose and is reached by swiping, so
+    // it is measured against its carousel rather than against the viewport.
+    // Everything else must sit within the viewport.
     const overflowing = await page.evaluate(() => {
+      // Swipeable means the viewer can actually reach the rest of it: auto or
+      // scroll, never `hidden`, which would simply clip a control away.
+      const swipeable = (node: Element) =>
+        node.scrollWidth > node.clientWidth + 1 &&
+        ["auto", "scroll"].includes(getComputedStyle(node).overflowX);
+      const scroller = (element: Element) => {
+        for (let node = element.parentElement; node; node = node.parentElement) {
+          if (swipeable(node)) return node;
+        }
+        return null;
+      };
       const width = document.documentElement.clientWidth;
-      return Array.from(document.querySelectorAll("button, a, input"))
+      const stranded = Array.from(document.querySelectorAll("button, a, input"))
         .map((element) => ({ element, box: element.getBoundingClientRect() }))
-        .filter(({ box }) => box.width > 0 && (box.left < -1 || box.right > width + 1))
-        .map(
-          ({ element, box }) =>
-            `${element.tagName}.${element.className}@${Math.round(box.left)}-${Math.round(box.right)}`,
-        );
+        .filter(({ element, box }) => box.width > 0 && !scroller(element))
+        .filter(({ box }) => box.left < -1 || box.right > width + 1);
+      // A carousel is only legitimate if the carousel itself fits the viewport.
+      const tracks = Array.from(document.querySelectorAll<HTMLElement>("*"))
+        .filter(swipeable)
+        .map((node) => ({ element: node, box: node.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && (box.left < -1 || box.right > width + 1));
+      return [...stranded, ...tracks].map(
+        ({ element, box }) =>
+          `${element.tagName}.${element.className}@${Math.round(box.left)}-${Math.round(box.right)}`,
+      );
     });
     expect(overflowing, `controls outside the viewport at ${size}`).toEqual([]);
   });

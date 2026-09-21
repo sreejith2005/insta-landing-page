@@ -30,45 +30,30 @@ export const DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF: SocialProofContent = {
     reviewCount: "X,XXX",
     reviews: [
       {
-        name: "Placeholder Reviewer",
+        author: "Placeholder Reviewer",
+        profileUrl: null,
         rating: 5,
         date: "Placeholder date",
         text: "Placeholder review. The team took time to understand what I wanted and helped me choose a necklace I will treasure for years.",
       },
       {
-        name: "Placeholder Reviewer",
+        author: "Placeholder Reviewer",
+        profileUrl: null,
         rating: 5,
         date: "Placeholder date",
         text: "Placeholder review. Beautiful designs, patient guidance and a very personal experience from enquiry to purchase.",
       },
       {
-        name: "Placeholder Reviewer",
+        author: "Placeholder Reviewer",
+        profileUrl: null,
         rating: 5,
         date: "Placeholder date",
         text: "Placeholder review. I enquired after seeing a piece on Instagram and was contacted quickly with every detail explained clearly.",
       },
     ],
   },
-  // NOT APPROVED FOR PRODUCTION — placeholder stories, not real customers.
-  testimonials: [
-    {
-      type: "text",
-      name: "Placeholder Customer",
-      context: "Placeholder · Bridal jewellery",
-      quote: "Placeholder story. From the first call, it felt like the team was choosing with us, not selling to us. The set became the heart of our wedding day.",
-    },
-    {
-      type: "text",
-      name: "Placeholder Customer",
-      context: "Placeholder · Anniversary gift",
-      quote: "Placeholder story. They helped me find a piece that felt personal, not just beautiful.",
-    },
-    {
-      type: "text",
-      name: "Placeholder Customer",
-      context: "Placeholder · Repeat customer",
-      quote: "Placeholder story. Every visit feels unhurried and genuinely personal.",
-    },
-  ],
+  // No placeholder testimonials: film is the only testimonial format, and a
+  // stand-in customer film cannot be faked the way a stand-in quote can.
+  testimonials: [],
   mediaProof: [],
 };

@@ -21,32 +21,44 @@ export type TrustMetric = Readonly<{
 
 export type GoogleReview = Readonly<{
   /** Reviewer's public Google display name. */
-  name: string;
-  rating: number;
+  author: string;
+  /** Reviewer's public Google Maps contributor page; null when not supplied. */
+  profileUrl: string | null;
   /** Verbatim review text. */
   text: string;
+  /** Star rating as shown on Google. Stars are hidden when absent. */
+  rating?: number;
   /** As shown on Google, e.g. "March 2026". */
   date?: string;
 }>;
 
 export type GoogleReviewsContent = Readonly<{
   enabled: boolean;
-  /** Aggregate rating exactly as shown on the Google Business Profile, e.g. "4.8". */
+  /** Aggregate rating exactly as shown on the Google Business Profile, e.g. "4.8". Optional. */
   rating?: string;
-  /** Review count as shown on Google, e.g. "1,240". */
+  /** Review count as shown on Google, e.g. "1,240". Optional. */
   reviewCount?: string;
   profileUrl?: string;
   reviews: readonly GoogleReview[];
 }>;
 
+/**
+ * A customer testimonial. Film is the only format: the customer speaks for
+ * themselves, so there is no written quote to attribute to them. A card is
+ * shown as soon as it has an `asset`; `name`, `quote` and `context` are
+ * captions that stay off the card until MK Jewels has the customer's consent
+ * to name them.
+ */
 export type Testimonial = Readonly<{
-  type: "text" | "image" | "video";
-  name: string;
-  quote: string;
-  /** /testimonials/... image (4:5 works best) or video file. Required for image/video. */
-  asset?: string;
-  /** Optional poster for a video testimonial. */
+  type: "video";
+  /** /testimonials/... video file. The only required field. */
+  asset: string;
+  /** Poster frame. Without one the card shows the film's own first frame. */
   poster?: string;
+  /** Customer's name, only with their consent to be named. */
+  name?: string;
+  /** A short approved line from them. The film itself is the testimonial. */
+  quote?: string;
   /** e.g. "Bridal customer, Mumbai". */
   context?: string;
 }>;

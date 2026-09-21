@@ -1,6 +1,12 @@
 import type { ProductRecord } from "@/lib/products/contracts";
 
-/** Development/test attribution mappings only; never production catalogue data. */
+/**
+ * Development/test attribution mappings only; never production catalogue data.
+ *
+ * MKBR639 carries both booking links so the success state's choice row and the
+ * Calendly embed can be exercised locally and in e2e. The other mappings leave
+ * them unset, which is what keeps the "no links, no buttons" gating covered.
+ */
 export const previewProducts: ProductRecord[] = [
   {
     productId: "MKBR639",
@@ -12,6 +18,8 @@ export const previewProducts: ProductRecord[] = [
     campaignId: "RAKHI26",
     productPosition: 1,
     active: true,
+    calendlyStoreUrl: "https://calendly.com/mis-mkjewels/new-meeting",
+    calendlyVideoUrl: "https://calendly.com/mis-mkjewels/new-meeting",
   },
   {
     productId: "RG5073",

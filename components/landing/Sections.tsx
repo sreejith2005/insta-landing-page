@@ -1,36 +1,7 @@
 import Image from "next/image";
 
-import { experienceCopy, journeySteps, reassurancePoints, whyReasons } from "@/config/experience";
+import { experienceCopy, journeySteps } from "@/config/experience";
 import { Reveal, ScrollCta } from "./motion";
-
-export function WhySection() {
-  return (
-    <section className="band band-warm why-band" aria-labelledby="why-heading">
-      <div className="container why-layout">
-        <Reveal className="section-intro align-left why-intro">
-          <p className="eyebrow">Why enquire with MK Jewels</p>
-          <h2 id="why-heading">
-            A more personal way <em>to find your piece</em>
-          </h2>
-          <p className="section-lede">
-            You have already chosen what caught your eye. From here, our team takes it forward with you.
-          </p>
-        </Reveal>
-        <ol className="why-list">
-          {whyReasons.map((reason, index) => (
-            <Reveal as="li" className="why-item" key={reason.title} delay={index * 90}>
-              <span className="why-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <h3>{reason.title}</h3>
-                <p>{reason.text}</p>
-              </div>
-            </Reveal>
-          ))}
-        </ol>
-      </div>
-    </section>
-  );
-}
 
 export function CtaBand() {
   return (
@@ -83,37 +54,6 @@ export function JourneySection() {
             </Reveal>
           ))}
         </ol>
-      </div>
-    </section>
-  );
-}
-
-export function ReassuranceSection() {
-  return (
-    <section className="band band-dark reassurance-band" aria-labelledby="reassurance-heading">
-      <div className="container">
-        <Reveal className="reassurance-layout">
-          <div className="section-intro on-dark align-left">
-            <p className="eyebrow">Enquire with confidence</p>
-            <h2 id="reassurance-heading">Simple, private, and personal.</h2>
-          </div>
-          <ul className="reassurance-list">
-            {reassurancePoints.map((point) => (
-              <li key={point.title}>
-                <span className="reassurance-mark" aria-hidden="true">◇</span>
-                <div>
-                  <h3>{point.title}</h3>
-                  <p>{point.text}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Reveal>
-        <div className="reassurance-cta">
-          <ScrollCta source="final" className="cta-link cta-gold">
-            {experienceCopy.finalCtaText}
-          </ScrollCta>
-        </div>
       </div>
     </section>
   );

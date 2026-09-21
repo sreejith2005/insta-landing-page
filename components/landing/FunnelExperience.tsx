@@ -10,9 +10,7 @@ import {
   CtaBand,
   JourneySection,
   ProofCtaBand,
-  ReassuranceSection,
   SiteFooter,
-  WhySection,
 } from "@/components/landing/Sections";
 import { HERO_SECTION_ID, StickyCta } from "@/components/landing/StickyCta";
 import { SuccessState, type BookingLinks, type TrackSuccessEvent } from "@/components/landing/SuccessState";
@@ -174,7 +172,6 @@ export function FunnelExperience({
           </div>
         </section>
 
-        <WhySection />
         <CtaBand />
         <JourneySection />
 
@@ -220,7 +217,6 @@ export function FunnelExperience({
 
         <BelowFunnel video={secondFilm} proof={proof} submitted={false} />
         {hasCustomerProof ? <ProofCtaBand /> : null}
-        <ReassuranceSection />
       </main>
       <SiteFooter />
       <StickyCta />

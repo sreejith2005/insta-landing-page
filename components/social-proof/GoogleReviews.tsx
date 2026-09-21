@@ -41,16 +41,24 @@ export function GoogleReviews({
         </Reveal>
         <ProofCarousel label="Google reviews" className="reviews-carousel">
           {content.reviews.map((review, index) => (
-            <li className="review-card" key={`${review.name}-${index}`}>
+            <li className="review-card" key={`${review.author}-${index}`}>
               <span className="review-quote" aria-hidden="true">“</span>
-              <Stars rating={review.rating} />
+              {review.rating ? <Stars rating={review.rating} /> : null}
               <blockquote>
                 <p>{review.text}</p>
               </blockquote>
               <footer>
-                <span className="review-avatar" aria-hidden="true">{review.name.trim().charAt(0)}</span>
+                <span className="review-avatar" aria-hidden="true">{review.author.trim().charAt(0)}</span>
                 <span>
-                  <strong>{review.name}</strong>
+                  <strong>
+                    {review.profileUrl ? (
+                      <a href={review.profileUrl} target="_blank" rel="noreferrer">
+                        {review.author}
+                      </a>
+                    ) : (
+                      review.author
+                    )}
+                  </strong>
                   <small>{review.date ? `${review.date} · Google` : "Google review"}</small>
                 </span>
               </footer>

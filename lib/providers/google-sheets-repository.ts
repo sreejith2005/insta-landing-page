@@ -150,6 +150,41 @@ export function sheetTimestamp(date: Date = new Date()) {
   return `${new Date(date.getTime() + IST_OFFSET_MS).toISOString().slice(0, -1)}+05:30`;
 }
 
+/** IST "DD/MM/YYYY", the Instagram FMS tab's date format. */
+export function fmsDateOnly(date: Date) {
+  const [year, month, day] = new Date(date.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10).split("-");
+  return `${day}/${month}/${year}`;
+}
+
+/**
+ * IST "DD/MM/YYYY HH:MM:SS" (24-hour, no milliseconds or zone), e.g.
+ * "18/09/2026 18:25:37". Instagram FMS tab only: every other tab keeps
+ * `sheetTimestamp`, which replay and recent-window counts parse.
+ */
+export function fmsDateTime(date: Date) {
+  return `${fmsDateOnly(date)} ${new Date(date.getTime() + IST_OFFSET_MS).toISOString().slice(11, 19)}`;
+}
+
+/**
+ * Plain 10-digit number for the FMS tab: spaces and a leading +91/91 country
+ * code removed. A bare "91" is only stripped from a 12-digit number, so a
+ * 10-digit number that happens to start with 91 is left intact.
+ */
+export function fmsPhone(phone: string) {
+  const compact = phone.replace(/\s+/g, "");
+  if (compact.startsWith("+91")) return compact.slice(3);
+  if (compact.length === 12 && compact.startsWith("91")) return compact.slice(2);
+  return compact;
+}
+
+/** The team's wording for each funnel source on the FMS tab. */
+export const fmsSourceLabels: Record<LeadSubmissionInput["source"], string> = {
+  instagram: "Direct Message",
+  manychat: "Direct Message",
+  whatsapp: "WhatsApp",
+  direct: "Direct",
+};
+
 /**
  * Resolves a context through the Reel_Product_Map tab: the exact
  * reel/campaign/product row decides whether the mapping exists and is active,
@@ -351,7 +386,8 @@ export class GoogleSheetsRepository implements FunnelRepository {
     const existing = customers.find((row) => row.phone_normalized === input.mobileNumber);
     const customerId = existing?.customer_id || `cus_${randomUUID()}`;
     const inquiryId = `inq_${randomUUID()}`;
-    const createdAt = sheetTimestamp();
+    const now = new Date();
+    const createdAt = sheetTimestamp(now);
 
     if (!existing) {
       await this.appendRecord(this.tabs.customers, defaultHeaders.customers, {
@@ -389,7 +425,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
       idempotency_key: input.idempotencyKey,
     });
 
-    await this.appendInstagramFms(input, product, inquiryId, createdAt);
+    await this.appendInstagramFms(input, product, inquiryId, now);
 
     return { inquiryId, customerId, isRepeatCustomer: Boolean(existing), wasReplay: false };
   }
@@ -404,24 +440,27 @@ export class GoogleSheetsRepository implements FunnelRepository {
     input: LeadSubmissionInput,
     product: ResolvedAttributionContext,
     inquiryId: string,
-    createdAt: string,
+    createdAt: Date,
   ) {
     const tab = this.tabs.instagramFms;
     if (!tab) return;
+    // Without a usable ManyChat DM time, the lead's own date stands in.
+    const dmReceivedAt = input.dmReceivedAt ? new Date(input.dmReceivedAt) : undefined;
+    const dmDate = dmReceivedAt && Number.isFinite(dmReceivedAt.getTime()) ? dmReceivedAt : createdAt;
     try {
       await this.appendRecord(tab, defaultHeaders.instagramFms, {
-        Timestamp: createdAt,
+        Timestamp: fmsDateTime(createdAt),
         "REFERENCE NUMBER": await this.referenceNumber(),
-        "DM RECEIVED DATE": input.dmReceivedAt ? sheetTimestamp(new Date(input.dmReceivedAt)) : "",
+        "DM RECEIVED DATE": fmsDateOnly(dmDate),
         "ASSIGNED BY": "",
         "CUSTOMER NAME": input.fullName,
         "INSTAGRAM ID": input.instagramUsername ?? "",
-        "CUSTOMER CONTACT NUMBER": input.mobileNumber,
+        "CUSTOMER CONTACT NUMBER": fmsPhone(input.mobileNumber),
         ADDRESS: "",
         CITY: input.city,
         STATE: input.state ?? "",
         "PIN CODE": input.pinCode,
-        "SOURCE OF THE LEAD": input.source,
+        "SOURCE OF THE LEAD": fmsSourceLabels[input.source],
         "PRODUCT NUMBER": input.productId,
         PRICING: "",
         IMAGE: product.imageUrl ?? "",

@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF } from "@/config/social-proof.development";
 import { socialProof, type SocialProofContent } from "@/config/social-proof";
+import { googleReviews } from "@/config/google-reviews";
+import { testimonialVideos } from "@/config/testimonial-videos";
 import { resolveSocialProof } from "@/lib/social-proof/resolve-social-proof";
 import type { IncomingInstagramContext } from "@/types/funnel";
 import { FunnelExperience } from "./FunnelExperience";
@@ -25,11 +27,11 @@ const approved: SocialProofContent = {
     rating: "4.8",
     reviewCount: "1,234",
     profileUrl: "https://maps.google.com/?cid=1",
-    reviews: [{ name: "Approved Reviewer", rating: 5, text: "Approved review text." }],
+    reviews: [{ author: "Approved Reviewer", profileUrl: null, rating: 5, text: "Approved review text." }],
   },
   testimonials: [
-    { type: "text", name: "Approved Customer", context: "Mumbai", quote: "Approved story quote." },
-    { type: "image", name: "Approved Bride", quote: "Approved image story.", asset: "/testimonials/bride.jpg" },
+    { type: "video", name: "Approved Customer", context: "Mumbai", quote: "Approved story quote.", asset: "/testimonials/one.mp4" },
+    { type: "video", asset: "/testimonials/two.mp4" },
   ],
   mediaProof: [],
 };
@@ -116,7 +118,7 @@ describe("FunnelExperience", () => {
     expect(document.querySelectorAll("form")).toHaveLength(1);
     const ctas = document.querySelectorAll<HTMLAnchorElement>("a[data-cta]");
     expect([...ctas].map((cta) => cta.dataset.cta)).toEqual(
-      expect.arrayContaining(["hero", "video", "mid", "proof", "final", "sticky"]),
+      expect.arrayContaining(["hero", "video", "mid", "proof", "sticky"]),
     );
     for (const cta of ctas) expect(cta.getAttribute("href")).toBe("#enquire");
 
@@ -141,7 +143,9 @@ describe("FunnelExperience", () => {
     expect(screen.getByText("1,234 reviews on Google")).toBeVisible();
     expect(screen.getByText("Approved review text.")).toBeVisible();
     expect(screen.getByText("Approved story quote.")).toBeVisible();
-    expect(screen.getByAltText("Approved Bride")).toBeInTheDocument();
+    // Both films are cards; the unattributed one carries no invented caption.
+    expect(document.querySelectorAll(".story-card video")).toHaveLength(2);
+    expect(screen.getByLabelText("Customer story 2")).toBeInTheDocument();
     expect(screen.queryByText(/Development placeholder/i)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Placeholder/);
   });
@@ -156,7 +160,7 @@ describe("FunnelExperience", () => {
 
     expect(screen.queryByRole("region", { name: /in numbers/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /Trusted by jewellery buyers/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /meaningful moments/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /own words/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /Still thinking/ })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/placeholder|1 Lakh\+|XX\+/i);
   });
@@ -170,9 +174,11 @@ describe("FunnelExperience", () => {
     );
 
     // Trust stats are labelled in the top trust bar, rendered by the page.
-    expect(screen.getAllByText(/Development placeholder · not approved for production/)).toHaveLength(2);
+    // Only Google reviews have a stand-in here; customer films have none, so
+    // the stories section stays absent rather than showing a fake film.
+    expect(screen.getAllByText(/Development placeholder · not approved for production/)).toHaveLength(1);
     expect(screen.getByRole("heading", { name: /Trusted by jewellery buyers/ })).toBeVisible();
-    expect(screen.getByRole("heading", { name: /meaningful moments/ })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: /own words/ })).not.toBeInTheDocument();
   });
 
   it("after an accepted lead, shows booking and WhatsApp options and tags their events with the inquiry", async () => {
@@ -203,8 +209,8 @@ describe("FunnelExperience", () => {
     await userEvent.type(screen.getByLabelText("City"), "Mumbai");
     await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Book a video call" }));
-    expect(screen.getByRole("link", { name: /Chat with us on WhatsApp/ })).toBeVisible();
+    fireEvent.click(await screen.findByRole("button", { name: "Book a video call demo" }));
+    expect(screen.getByRole("link", { name: /Chat on WhatsApp/ })).toBeVisible();
     expect(document.body.textContent).not.toMatch(/Rose Bracelet|MKBR639/);
 
     await waitFor(() => {
@@ -236,7 +242,7 @@ describe("FunnelExperience", () => {
     const form = document.getElementById("enquire")!;
     const video = screen.getByRole("region", { name: /Made to be noticed/ });
     const reviews = screen.getByRole("heading", { name: /Trusted by jewellery buyers/ }).closest("section")!;
-    const stories = screen.getByRole("heading", { name: /meaningful moments/ }).closest("section")!;
+    const stories = screen.getByRole("heading", { name: /own words/ }).closest("section")!;
     expect(form.nextElementSibling).toBe(video);
     expect(video.nextElementSibling).toBe(reviews);
     expect(reviews.nextElementSibling).toBe(stories);
@@ -278,19 +284,36 @@ describe("FunnelExperience", () => {
     const video = screen.getByRole("region", { name: /Made to be noticed/ });
     expect(success.nextElementSibling).toBe(video);
     expect(screen.getByRole("heading", { name: /Trusted by jewellery buyers/ })).toBeVisible();
-    expect(screen.getByRole("heading", { name: /meaningful moments/ })).toBeVisible();
+    expect(screen.getByRole("heading", { name: /own words/ })).toBeVisible();
     expect(document.querySelector("a[data-cta]")).toBeNull();
   });
 
-  it("renders no testimonials section while config/testimonial-videos.ts is empty in production", () => {
+  it("renders the shipped approved proof — films, Google reviews and trust stats — in production, unlabelled", () => {
     render(
       <FunnelExperience
         context={context}
         runtime={{ landingPageVersion: "rich-v3", socialProof: resolveSocialProof(socialProof, DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF, true, "production") }}
       />,
     );
-    expect(screen.queryByRole("heading", { name: /meaningful moments/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /Trusted by jewellery buyers/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: /Made to be noticed/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /own words/ })).toBeVisible();
+    expect(document.querySelectorAll(".story-card")).toHaveLength(testimonialVideos.length);
+    expect(screen.getByRole("heading", { name: /Trusted by jewellery buyers/ })).toBeVisible();
+    expect(document.querySelectorAll(".review-card")).toHaveLength(googleReviews.reviews.length);
+    // Real, approved content — never a labelled development placeholder.
+    expect(screen.queryByText(/Development placeholder/i)).not.toBeInTheDocument();
+    expect(document.querySelector("[data-placeholder]")).toBeNull();
+  });
+
+  it("no longer renders the 'Enquire with confidence' reassurance section", () => {
+    render(
+      <FunnelExperience
+        context={context}
+        runtime={{ landingPageVersion: "rich-v3", socialProof: resolveSocialProof(socialProof, DEVELOPMENT_PLACEHOLDER_SOCIAL_PROOF, true, "production") }}
+      />,
+    );
+    expect(screen.queryByText(/Enquire with confidence/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Simple, private, and personal/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/No payment to enquire|Only four details|Private by design/)).not.toBeInTheDocument();
+    expect(document.querySelector(".reassurance-band, a[data-cta=final]")).toBeNull();
   });
 });

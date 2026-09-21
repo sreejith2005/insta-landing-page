@@ -43,8 +43,8 @@ describe("TrustBar", () => {
   });
 
   it("caps the number of stats and never labels a count-only bar as a placeholder", () => {
-    const many = [...stats, { value: "10K+", label: "Designs" }, { value: "25", label: "Years" }];
-    expect(resolveTrustBar(null, many, false)?.stats).toHaveLength(3);
+    const many = [...stats, { value: "10K+", label: "Designs" }, { value: "25", label: "Years" }, { value: "1", label: "Extra" }];
+    expect(resolveTrustBar(null, many, false)?.stats).toHaveLength(4);
     expect(resolveTrustBar({ count: 3, live: false, label: "3 enquiries" }, [], true)?.placeholder).toBe(false);
   });
 });

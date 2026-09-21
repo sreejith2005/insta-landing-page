@@ -5,6 +5,10 @@ import type { LeadSubmissionInput } from "@/lib/validation/schemas";
 import {
   countMatchingInquiries,
   defaultHeaders,
+  fmsDateOnly,
+  fmsDateTime,
+  fmsPhone,
+  fmsSourceLabels,
   GoogleSheetsRepository,
   headerRecord,
   latestInquiryForContact,
@@ -226,6 +230,36 @@ describe("sheetTimestamp", () => {
   });
 });
 
+describe("Instagram FMS formatters", () => {
+  it("writes IST as DD/MM/YYYY HH:MM:SS with no milliseconds or zone", () => {
+    expect(fmsDateTime(new Date("2026-09-18T12:55:37.912Z"))).toBe("18/09/2026 18:25:37");
+    expect(fmsDateTime(new Date("2026-01-04T21:05:09.000Z"))).toBe("05/01/2026 02:35:09");
+  });
+
+  it("writes the IST calendar date, rolling over past midnight IST", () => {
+    expect(fmsDateOnly(new Date("2026-09-18T12:55:37.000Z"))).toBe("18/09/2026");
+    expect(fmsDateOnly(new Date("2026-09-18T18:45:00.000Z"))).toBe("19/09/2026");
+  });
+
+  it("reduces phone numbers to plain 10 digits", () => {
+    expect(fmsPhone("9978621605")).toBe("9978621605");
+    expect(fmsPhone("+919978621605")).toBe("9978621605");
+    expect(fmsPhone("+91 99786 21605")).toBe("9978621605");
+    expect(fmsPhone("919978621605")).toBe("9978621605");
+    // A 10-digit number that begins with 91 is not a country code.
+    expect(fmsPhone("9123456789")).toBe("9123456789");
+  });
+
+  it("labels every funnel source", () => {
+    expect(fmsSourceLabels).toEqual({
+      instagram: "Direct Message",
+      manychat: "Direct Message",
+      whatsapp: "WhatsApp",
+      direct: "Direct",
+    });
+  });
+});
+
 describe("GoogleSheetsRepository Instagram FMS dual-write", () => {
   const sheets = {
     products: "Products",
@@ -302,7 +336,7 @@ describe("GoogleSheetsRepository Instagram FMS dual-write", () => {
     const fms = appended[2].row;
     expect(fms).toMatchObject({
       "REFERENCE NUMBER": "MK-2609-0042",
-      "DM RECEIVED DATE": "2026-09-17T19:43:04.000+05:30",
+      "DM RECEIVED DATE": "17/09/2026",
       "ASSIGNED BY": "",
       "CUSTOMER NAME": "Ananya Shah",
       "INSTAGRAM ID": "ananya.s",
@@ -311,12 +345,30 @@ describe("GoogleSheetsRepository Instagram FMS dual-write", () => {
       CITY: "Mumbai",
       STATE: "Maharashtra",
       "PIN CODE": "400001",
-      "SOURCE OF THE LEAD": "manychat",
+      "SOURCE OF THE LEAD": "Direct Message",
       "PRODUCT NUMBER": "MK001",
       PRICING: "",
       IMAGE: "https://cdn.example.com/mk001.jpg",
     });
-    expect(fms.Timestamp).toBe(appended[1].row.created_at);
+    // Same instant as the inquiry, in the FMS format; Inquiries keeps ISO.
+    const inquiry = appended[1].row;
+    expect(inquiry.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+05:30$/);
+    expect(fms.Timestamp).toBe(fmsDateTime(new Date(inquiry.created_at)));
+    expect(inquiry.source).toBe("manychat");
+  });
+
+  it("keeps Inquiries' phone as-is and writes a 10-digit number to FMS", async () => {
+    const { repository, appended } = repositoryWith();
+    await repository.acceptLead({ ...lead, mobileNumber: "+919978621605" }, product);
+    expect(appended[1].row.phone_normalized).toBe("+919978621605");
+    expect(appended[2].row["CUSTOMER CONTACT NUMBER"]).toBe("9978621605");
+  });
+
+  it("falls back to the lead's date when no DM time was captured", async () => {
+    const { repository, appended } = repositoryWith();
+    await repository.acceptLead({ ...lead, dmReceivedAt: undefined }, product);
+    const fms = appended[2].row;
+    expect(fms["DM RECEIVED DATE"]).toBe(fms.Timestamp.slice(0, 10));
   });
 
   it("still accepts the lead when the FMS write fails", async () => {
