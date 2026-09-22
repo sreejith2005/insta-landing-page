@@ -159,6 +159,10 @@ describe("parseServerEnv", () => {
         storeUrl: "https://calendly.com/mk/store-visit",
       },
     });
+    expect(
+      parseServerEnv({ ...base, NODE_ENV: "test", CALENDLY_STORE_VISIT_URL: "https://calendly.com/mk/one" }).calendly
+        .defaultLinks.storeUrl,
+    ).toBe("https://calendly.com/mk/one");
     expect(() =>
       parseServerEnv({ ...base, NODE_ENV: "test", CALENDLY_STORE_URL: "https://example.com/book" }),
     ).toThrow(/calendly\.com/);

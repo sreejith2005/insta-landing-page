@@ -13,9 +13,29 @@ export type BookingType = "video_call" | "store_visit";
 export type TrackSuccessEvent = (eventName: FunnelEventName, metadata?: { bookingType: BookingType }) => void;
 
 const bookingActions = [
-  { type: "video_call", key: "videoUrl", label: "Book a video call demo", openedEvent: "calendly_video_call_opened" },
-  { type: "store_visit", key: "storeUrl", label: "Book a store visit", openedEvent: "calendly_store_visit_opened" },
+  {
+    type: "video_call",
+    key: "videoUrl",
+    title: "Video call demo",
+    description: "See the jewellery live, from home",
+    note: "A jewellery expert will walk you through the piece over a video call.",
+    openedEvent: "calendly_video_call_opened",
+  },
+  {
+    type: "store_visit",
+    key: "storeUrl",
+    title: "Store visit",
+    description: "See and try it in person",
+    note: "Our team will have the piece ready for you when you arrive.",
+    openedEvent: "calendly_store_visit_opened",
+  },
 ] as const;
+
+/**
+ * How long after the confirmation appears the schedulers start loading in the
+ * background, so the success animation is not competing with Calendly.
+ */
+const SCHEDULER_WARM_UP_MS = 600;
 
 const WHATSAPP_LABEL = "Chat with a representative on WhatsApp";
 const WHATSAPP_HINT = "Fastest reply · Talk to our team directly";
@@ -35,7 +55,8 @@ const calendlyMessages: Partial<Record<string, FunnelEventName>> = {
 /**
  * Post-enquiry next steps, as a choice rather than an automatic embed. WhatsApp
  * leads as the full-width primary action; the two optional booking choices sit
- * below it, and only picking one mounts a scheduler. Each booking button
+ * below it, and only picking one shows its scheduler (both are pre-loaded,
+ * hidden, moments after the confirmation appears). Each booking button
  * appears only when a Calendly link exists for it, and WhatsApp only when a CRM
  * number is configured — WhatsApp is an ordinary link, so choosing it neither
  * opens nor closes a scheduler.
@@ -53,6 +74,10 @@ function BookingOptions({
   track?: TrackSuccessEvent;
 }) {
   const [open, setOpen] = useState<BookingType | null>(null);
+  // Schedulers are mounted (hidden) shortly after the confirmation appears, so
+  // Calendly has usually finished loading by the time the customer picks one.
+  const [warm, setWarm] = useState(false);
+  const panels = useRef<Partial<Record<BookingType, HTMLDivElement | null>>>({});
   // Read inside the mount effect so a fresh `track` identity never re-fires an
   // event. Declared first, so it is up to date before that effect runs.
   const latestTrack = useRef(track);
@@ -60,8 +85,13 @@ function BookingOptions({
     latestTrack.current = track;
   });
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setWarm(true), SCHEDULER_WARM_UP_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   // The "opened" event belongs to the scheduler actually appearing, not to the
-  // click: it fires as the widget mounts, and again when the customer swaps to
+  // click: it fires as the panel is shown, and again when the customer swaps to
   // the other option. Closing the open one fires nothing.
   useEffect(() => {
     if (!open) return;
@@ -69,7 +99,7 @@ function BookingOptions({
     if (action) latestTrack.current?.(action.openedEvent, { bookingType: open });
   }, [open]);
 
-  // Only one scheduler is open at a time, so it identifies the booking type.
+  // Only one scheduler is visible at a time, so it identifies the booking type.
   useEffect(() => {
     if (!open || !track) return;
     function onMessage(event: MessageEvent) {
@@ -84,7 +114,13 @@ function BookingOptions({
 
   const actions = bookingActions.filter((action) => booking?.[action.key]);
   if (!actions.length && !whatsappUrl) return null;
-  const openAction = actions.find((action) => action.type === open);
+
+  function choose(type: BookingType) {
+    const next = open === type ? null : type;
+    setOpen(next);
+    // Bring the newly shown scheduler into view; on a phone it opens below the fold.
+    if (next) requestAnimationFrame(() => panels.current[next]?.scrollIntoView?.({ behavior: "smooth", block: "start" }));
+  }
 
   return (
     <div className="success-booking">
@@ -114,29 +150,73 @@ function BookingOptions({
             {actions.map((action) => (
               <button
                 type="button"
-                className="cta-link cta-outline"
+                className="booking-option"
                 key={action.type}
                 aria-expanded={open === action.type}
-                aria-controls={open === action.type ? `booking-${action.type}` : undefined}
-                // Tracking happens when the widget mounts, in the effect above.
-                onClick={() => setOpen(open === action.type ? null : action.type)}
+                aria-controls={`booking-${action.type}`}
+                // Tracking happens when the panel is shown, in the effect above.
+                onClick={() => choose(action.type)}
               >
-                {action.label}
+                <span className="booking-option-icon" aria-hidden="true">
+                  {action.type === "video_call" ? <VideoIcon /> : <StoreIcon />}
+                </span>
+                <span className="booking-option-text">
+                  <span className="booking-option-title">{action.title}</span>
+                  <span className="booking-option-description">{action.description}</span>
+                </span>
+                <span className="booking-option-chevron" aria-hidden="true" />
               </button>
             ))}
           </div>
+          {actions.map((action) =>
+            warm || open === action.type ? (
+              <div
+                key={action.type}
+                ref={(node) => {
+                  panels.current[action.type] = node;
+                }}
+                id={`booking-${action.type}`}
+                // A closed scheduler stays rendered, transparent and inert,
+                // rather than `display: none`: Calendly pauses loading in a
+                // hidden frame, which is the wait this pre-loading avoids.
+                className={open === action.type ? "booking-panel" : "booking-panel is-preloading"}
+                role="region"
+                aria-label={action.title}
+                aria-hidden={open !== action.type || undefined}
+                inert={open !== action.type}
+              >
+                <div className="booking-panel-head">
+                  <p className="booking-panel-eyebrow">{action.title}</p>
+                  <h2 className="booking-panel-title">Choose a day and time</h2>
+                  <p className="booking-panel-note">{action.note}</p>
+                </div>
+                <CalendlyInline url={booking![action.key]!} inquiryId={inquiryId} bookingType={action.type} />
+              </div>
+            ) : null,
+          )}
         </>
       ) : null}
-      {openAction ? (
-        <CalendlyInline
-          key={openAction.type}
-          id={`booking-${openAction.type}`}
-          url={booking![openAction.key]!}
-          label={openAction.label}
-          inquiryId={inquiryId}
-        />
-      ) : null}
     </div>
+  );
+}
+
+function VideoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="6" width="13" height="12" rx="2" />
+      <path d="m15.5 10.5 6-3.5v10l-6-3.5" />
+    </svg>
+  );
+}
+
+function StoreIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 9.5 5 4h14l1.5 5.5" />
+      <path d="M3.5 9.5c0 1.4 1.1 2.5 2.5 2.5s2.5-1.1 2.5-2.5c0 1.4 1.1 2.5 2.5 2.5h2c1.4 0 2.5-1.1 2.5-2.5 0 1.4 1.1 2.5 2.5 2.5s2.5-1.1 2.5-2.5" />
+      <path d="M5 12v8h14v-8" />
+      <path d="M10 20v-4.5h4V20" />
+    </svg>
   );
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { calendlyUrl, withInquiryTracking } from "./calendly";
+import { calendlyUrl, schedulerUrl } from "./calendly";
 
 describe("calendlyUrl", () => {
   it("keeps only https calendly.com scheduling links", () => {
@@ -14,22 +14,32 @@ describe("calendlyUrl", () => {
   });
 });
 
-describe("withInquiryTracking", () => {
-  it("sets the inquiry ID as utm_content", () => {
-    expect(withInquiryTracking("https://calendly.com/mk/video", "inq_1")).toBe(
-      "https://calendly.com/mk/video?utm_content=inq_1",
-    );
+describe("schedulerUrl", () => {
+  it("sets the inquiry ID as utm_content and the booking choice as utm_term", () => {
+    const url = new URL(schedulerUrl("https://calendly.com/mk/video", { inquiryId: "inq_1", bookingType: "store_visit" }));
+    expect(url.origin + url.pathname).toBe("https://calendly.com/mk/video");
+    expect(url.searchParams.get("utm_content")).toBe("inq_1");
+    expect(url.searchParams.get("utm_term")).toBe("store_visit");
   });
 
-  it("keeps the link's other parameters and replaces an existing utm_content", () => {
-    const tracked = new URL(
-      withInquiryTracking("https://calendly.com/mk/video?hide_gdpr_banner=1&utm_content=reel", "inq_2"),
-    );
-    expect(tracked.searchParams.get("hide_gdpr_banner")).toBe("1");
-    expect(tracked.searchParams.getAll("utm_content")).toEqual(["inq_2"]);
+  it("hides Calendly's own header and cookie banner", () => {
+    const url = new URL(schedulerUrl("https://calendly.com/mk/video"));
+    expect(url.searchParams.get("hide_event_type_details")).toBe("1");
+    expect(url.searchParams.get("hide_landing_page_details")).toBe("1");
+    expect(url.searchParams.get("hide_gdpr_banner")).toBe("1");
+    expect(url.searchParams.has("utm_content")).toBe(false);
+    expect(url.searchParams.has("utm_term")).toBe(false);
   });
 
-  it("leaves the link alone without an inquiry ID", () => {
-    expect(withInquiryTracking("https://calendly.com/mk/video", undefined)).toBe("https://calendly.com/mk/video");
+  it("keeps the link's other parameters and replaces existing tracking values", () => {
+    const url = new URL(
+      schedulerUrl("https://calendly.com/mk/video?month=2026-10&utm_content=reel&utm_term=x", {
+        inquiryId: "inq_2",
+        bookingType: "video_call",
+      }),
+    );
+    expect(url.searchParams.get("month")).toBe("2026-10");
+    expect(url.searchParams.getAll("utm_content")).toEqual(["inq_2"]);
+    expect(url.searchParams.getAll("utm_term")).toEqual(["video_call"]);
   });
 });

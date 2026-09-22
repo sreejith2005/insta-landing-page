@@ -849,32 +849,141 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; 
 .success-booking-divider { display: flex; align-items: center; gap: 12px; margin: 22px 0 12px; color: var(--muted-dark); font-size: 12px; letter-spacing: .06em; }
 .success-booking-divider::before,
 .success-booking-divider::after { flex: 1; height: 1px; background: var(--line-dark); content: ""; }
-/* Booking choices: one column on phones, side by side from 480px. */
+/* Booking choices: option cards, one column on phones, side by side from 560px. */
 .success-booking-actions { display: grid; gap: 10px; }
-.success-booking-actions .cta-link { width: 100%; max-width: none; cursor: pointer; text-align: center; }
-.success-booking-actions .cta-link[aria-expanded="true"] { border-color: var(--gold); background: rgba(217,183,116,.14); box-shadow: 0 0 0 1px var(--gold); }
-@media (min-width: 480px) {
+@media (min-width: 560px) {
   .success-choice { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
 }
-/* Secondary CTA on dark bands: gold outline, quieter than the solid CTAs. */
-.cta-outline { min-height: 50px; border-color: rgba(217,183,116,.55); background: transparent; color: var(--gold-light); }
-.cta-outline:hover { border-color: var(--gold); background: rgba(217,183,116,.1); box-shadow: none; }
+.booking-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(217,183,116,.32);
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+  color: #f4ede0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .2s, background .2s, box-shadow .2s, transform .2s;
+}
+.booking-option:hover { border-color: rgba(217,183,116,.7); background: rgba(217,183,116,.07); }
+.booking-option:active { transform: translateY(1px); }
+.booking-option[aria-expanded="true"] {
+  border-color: var(--gold);
+  background: linear-gradient(135deg, rgba(217,183,116,.2), rgba(217,183,116,.06));
+  box-shadow: 0 0 0 1px var(--gold), 0 12px 28px rgba(0,0,0,.28);
+}
+.booking-option-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(217,183,116,.45);
+  border-radius: 50%;
+  color: var(--gold);
+  transition: background .2s, color .2s;
+}
+.booking-option-icon svg { width: 20px; height: 20px; }
+.booking-option[aria-expanded="true"] .booking-option-icon { background: var(--gold); color: var(--ink); }
+.booking-option-text { display: grid; gap: 3px; }
+.booking-option-title { color: #fbf6ec; font-family: var(--display); font-size: 1.2rem; line-height: 1.15; }
+.booking-option-description { color: var(--muted-dark); font-size: 12.5px; line-height: 1.4; }
+.booking-option-chevron {
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-right: 1.5px solid var(--gold);
+  border-bottom: 1.5px solid var(--gold);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform .25s var(--ease);
+}
+.booking-option[aria-expanded="true"] .booking-option-chevron { transform: rotate(225deg) translate(-2px, -2px); }
+
+/* The open scheduler: an ivory card with the page's own header, since
+   Calendly's event header is hidden (see schedulerUrl). */
+.booking-panel {
+  margin: 16px 0 0;
+  overflow: hidden;
+  border: 1px solid rgba(217,183,116,.55);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 28px 60px rgba(0,0,0,.38);
+  text-align: center;
+  scroll-margin-top: 12px;
+  animation: panel-in .45s var(--ease);
+}
+/* A scheduler loading ahead of the customer's choice: laid out and painted
+   (so Calendly keeps loading) but invisible, untouchable and behind the page. */
+.booking-panel.is-preloading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: min(640px, 100%);
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  animation: none;
+}
+@keyframes panel-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.booking-panel-head {
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(80% 120% at 50% 0%, rgba(217,183,116,.18), transparent 70%),
+    var(--ivory);
+}
+.booking-panel-eyebrow { margin: 0; color: var(--gold-deep); font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; }
+.band-dark .booking-panel-title { margin: 6px 0 0; color: var(--ink); font-family: var(--display); font-size: clamp(1.5rem, 5vw, 1.9rem); font-weight: 400; line-height: 1.1; }
+.booking-panel-note { max-width: 420px; margin: 8px auto 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .cta-whatsapp { border-color: #25d366; background: #1f7a4a; color: #fff; }
 .cta-whatsapp:hover { background: #25a35a; }
 .cta-whatsapp .cta-arrow { color: #fff; }
 /* Fluid embed (see CalendlyInline's `resize: true`): the scheduler follows
-   this width, so it never forces the page wider than the viewport. Height is
-   viewport-relative so a phone shows the month without an inner scroll war. */
+   this width, so it never forces the page wider than the viewport. Calendly
+   sets the final height; this is the reserved space while it loads. */
+.calendly-frame { position: relative; }
 .calendly-embed {
   width: 100%;
   max-width: 100%;
-  height: clamp(560px, 78svh, 760px);
-  margin: 18px 0 0;
+  min-height: clamp(520px, 70svh, 620px);
   overflow: hidden;
-  border-radius: 6px;
   background: #fff;
 }
 .calendly-embed iframe { width: 100%; max-width: 100%; display: block; }
+/* widget.js's spinner needs Calendly's stylesheet, which is not loaded. */
+.calendly-embed .calendly-spinner { display: none; }
+.calendly-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  padding-top: 120px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: .04em;
+}
+.calendly-loader-ring {
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--line);
+  border-top-color: var(--gold-dark);
+  border-radius: 50%;
+  animation: spin .9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .calendly-loader-ring { animation-duration: 2.4s; }
+  .booking-panel { animation: none; }
+}
 .success-next .section-intro { margin-bottom: 22px; }
 .success-steps .journey-index { background: var(--ivory); }
 .success-footnote { max-width: 520px; margin: 24px auto 0; color: var(--muted); font-size: 13px; line-height: 1.55; text-align: center; }
@@ -957,7 +1066,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; 
   .video-intro { margin-bottom: 32px; }
   .success-hero { min-height: 56svh; padding: 56px 0; }
   .success-mark { width: 84px; height: 84px; margin-bottom: 22px; }
-  .calendly-embed { height: 720px; margin-top: 22px; }
+  .booking-panel-head { padding: 26px 28px 18px; }
   .stories-strip {
     grid-auto-flow: row;
     grid-auto-columns: auto;

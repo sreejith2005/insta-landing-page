@@ -209,7 +209,7 @@ describe("FunnelExperience", () => {
     await userEvent.type(screen.getByLabelText("City"), "Mumbai");
     await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Book a video call demo" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Video call demo/ }));
     expect(screen.getByRole("link", { name: /Chat with a representative on WhatsApp/ })).toBeVisible();
     expect(document.body.textContent).not.toMatch(/Rose Bracelet|MKBR639/);
 

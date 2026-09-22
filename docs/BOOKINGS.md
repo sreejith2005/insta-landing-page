@@ -5,8 +5,12 @@ After an enquiry is accepted, the success state offers up to three actions. None
 | Action | Shown when | Browser event(s) |
 | --- | --- | --- |
 | Book a video call demo | Product row has a `https://calendly.com/...` `calendly_video_url`, or `CALENDLY_VIDEO_URL` is set | `calendly_video_call_opened`, then `calendly_date_time_selected` / `calendly_event_scheduled` |
-| Book a store visit | Product row has a `https://calendly.com/...` `calendly_store_url`, or `CALENDLY_STORE_URL` is set | `calendly_store_visit_opened`, then the same two |
+| Book a store visit | Product row has a `https://calendly.com/...` `calendly_store_url`, or `CALENDLY_STORE_URL` (or `CALENDLY_STORE_VISIT_URL`) is set | `calendly_store_visit_opened`, then the same two |
 | Chat with a representative on WhatsApp | `CRM_WHATSAPP_NUMBER` is set | `whatsapp_contact_clicked` |
+
+Both schedulers start loading, invisibly, shortly after the confirmation appears, so choosing one shows its calendar almost at once. Calendly's own event header is hidden (`hide_event_type_details`, `hide_landing_page_details`) and the page draws its own "Video call demo" / "Store visit" header instead. Calendly's colours can only be changed on a paid Calendly plan.
+
+**One Calendly event type for both (free plan).** Calendly's free plan allows one active event type, so both links can point at the same event. Give it a neutral name and location (for example "MK Jewels Appointment", location left for the team to confirm), because that name still appears in Calendly's confirmation email. The embed sends the chosen button as `utm_term` (`video_call` / `store_visit`), and the webhook uses it for `booking_type`.
 
 WhatsApp is the primary action: it is shown first, full width. The two booking buttons sit below it under an "(optional)" divider, and a product row's own link overrides the `CALENDLY_*_URL` default. The booking buttons open Calendly's official inline embed (`assets.calendly.com/assets/external/widget.js`). The WhatsApp link is a `wa.me` deep link whose message comes from `whatsappMessageTemplate` in `config/experience.ts`, filled in with the product name and ID.
 
@@ -20,7 +24,7 @@ Calendly's `postMessage` events only report *that* a slot was picked or booked. 
 
 `created_at, booking_type, scheduled_start, scheduled_end, invitee_name, invitee_email, product_id, reel_id, campaign_id, calendly_invitee_uri, reference_number`
 
-- `booking_type` is `video_call` or `store_visit`. It is decided by `CALENDLY_VIDEO_EVENT_TYPES` / `CALENDLY_STORE_EVENT_TYPES`, and is `unknown` when the event type is in neither list.
+- `booking_type` is `video_call` or `store_visit`. It comes from the button the customer chose (`payload.tracking.utm_term`); failing that, from `CALENDLY_VIDEO_EVENT_TYPES` / `CALENDLY_STORE_EVENT_TYPES`; and is `unknown` when neither applies.
 - `product_id`, `reel_id`, `campaign_id` and `reference_number` come from the booking's Inquiries row, found in this order:
   1. **Inquiry ID.** The embed adds `utm_content=<inquiryId>` to the scheduling link, and Calendly returns it in the webhook's `payload.tracking.utm_content`. The webhook looks up that `inquiry_id` in Inquiries.
   2. **Phone, as a fallback.** This is used when there is no inquiry ID, for example a booking made from a link shared outside the funnel. It picks the invitee's most recent Inquiries row whose phone matches the SMS reminder number, or any booking-question answer that is an Indian mobile. The Inquiries tab has no email column, so email alone never matches.

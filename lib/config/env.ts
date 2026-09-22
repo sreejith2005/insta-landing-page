@@ -96,6 +96,8 @@ const rawSchema = z.object({
   /** Default booking links, used when the product row has no calendly_video_url / calendly_store_url. */
   CALENDLY_VIDEO_URL: optionalCalendlyUrl,
   CALENDLY_STORE_URL: optionalCalendlyUrl,
+  /** Alternative name for CALENDLY_STORE_URL; CALENDLY_STORE_URL wins when both are set. */
+  CALENDLY_STORE_VISIT_URL: optionalCalendlyUrl,
   ASSISTED_SUPPORT_URL: optionalHttpsUrl,
   /** CRM WhatsApp number for the post-enquiry "Chat with us" button. Unset hides the button. */
   CRM_WHATSAPP_NUMBER: optionalWhatsAppNumber,
@@ -156,7 +158,7 @@ export function parseServerEnv(input: Record<string, string | undefined>) {
       },
       defaultLinks: {
         videoUrl: raw.CALENDLY_VIDEO_URL,
-        storeUrl: raw.CALENDLY_STORE_URL,
+        storeUrl: raw.CALENDLY_STORE_URL ?? raw.CALENDLY_STORE_VISIT_URL,
       },
     },
     inquiryCount: {

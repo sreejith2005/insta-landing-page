@@ -188,10 +188,14 @@ export const calendlyInviteeCreatedSchema = z.object({
       .nullish(),
     /**
      * The scheduling link's `utm_*` parameters. The embed sets `utm_content` to
-     * the inquiry ID; bookings made outside the funnel send nulls. A malformed
-     * value is dropped (and the booking joined by phone) rather than rejected.
+     * the inquiry ID and `utm_term` to the booking choice; bookings made
+     * outside the funnel send nulls. A malformed value is dropped (and the
+     * booking joined by phone) rather than rejected.
      */
-    tracking: z.object({ utm_content: z.string().max(200).nullish() }).nullish().catch(null),
+    tracking: z
+      .object({ utm_content: z.string().max(200).nullish(), utm_term: z.string().max(200).nullish() })
+      .nullish()
+      .catch(null),
     scheduled_event: z.object({
       start_time: calendlyTimestamp,
       end_time: calendlyTimestamp,

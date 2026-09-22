@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { PreviewRepository } from "@/lib/providers/preview-repository";
 import type { CalendlyInviteeCreated } from "@/lib/validation/schemas";
-import { bookingTypeFor, inviteePhones, recordCalendlyBooking, trackedInquiryId } from "./record-calendly-booking";
+import {
+  bookingTypeFor,
+  inviteePhones,
+  recordCalendlyBooking,
+  trackedBookingType,
+  trackedInquiryId,
+} from "./record-calendly-booking";
 
 const eventTypes = {
   videoCall: ["https://api.calendly.com/event_types/VIDEO"],
@@ -49,6 +55,14 @@ describe("bookingTypeFor", () => {
     expect(bookingTypeFor("https://api.calendly.com/event_types/VIDEO", eventTypes)).toBe("video_call");
     expect(bookingTypeFor("https://api.calendly.com/event_types/STORE", eventTypes)).toBe("store_visit");
     expect(bookingTypeFor("https://api.calendly.com/event_types/OTHER", eventTypes)).toBe("unknown");
+  });
+
+  it("prefers the button the customer chose, since one event type can serve both", () => {
+    expect(bookingTypeFor("https://api.calendly.com/event_types/VIDEO", eventTypes, "store_visit")).toBe("store_visit");
+    expect(bookingTypeFor("https://api.calendly.com/event_types/OTHER", eventTypes, "video_call")).toBe("video_call");
+    expect(trackedBookingType(invitee({ tracking: { utm_term: " store_visit " } }).payload)).toBe("store_visit");
+    expect(trackedBookingType(invitee({ tracking: { utm_term: "bridal" } }).payload)).toBeUndefined();
+    expect(trackedBookingType(invitee({ tracking: null }).payload)).toBeUndefined();
   });
 });
 

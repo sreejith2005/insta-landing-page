@@ -34,29 +34,31 @@ describe("SuccessState", () => {
         booking={{ videoUrl: "https://calendly.com/mk/video", storeUrl: "https://calendly.com/mk/store" }}
       />,
     );
-    const video = screen.getByRole("button", { name: "Book a video call demo" });
+    const video = screen.getByRole("button", { name: /Video call demo/ });
     expect(video).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("region", { name: "Book a video call demo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /Video call demo/ })).not.toBeInTheDocument();
 
     fireEvent.click(video);
     expect(video).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("region", { name: "Book a video call demo" })).toHaveAttribute("id", video.getAttribute("aria-controls"));
+    const panel = screen.getByRole("region", { name: /Video call demo/ });
+    expect(panel).toHaveAttribute("id", video.getAttribute("aria-controls"));
+    expect(panel).toHaveTextContent("Choose a day and time");
     // The official embed script, never a hand-built iframe.
     expect(document.querySelector(`script[src="${CALENDLY_WIDGET_SRC}"]`)).not.toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Book a store visit" }));
-    expect(screen.queryByRole("region", { name: "Book a video call demo" })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Book a store visit" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Store visit/ }));
+    expect(screen.queryByRole("region", { name: /Video call demo/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /Store visit/ })).toBeInTheDocument();
 
     rerender(<SuccessState isRepeatCustomer={false} booking={{ storeUrl: "https://calendly.com/mk/store" }} />);
-    expect(screen.queryByRole("button", { name: "Book a video call demo" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Book a store visit" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Video call demo/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Store visit/ })).toBeVisible();
 
     // Without WhatsApp the booking choices still say they are optional.
     expect(screen.getByText("Book a time that suits you (optional)")).toBeVisible();
 
     rerender(<SuccessState isRepeatCustomer={false} booking={{}} />);
-    expect(screen.queryByRole("button", { name: /Book a/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Video call demo|Store visit/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/optional/)).not.toBeInTheDocument();
   });
 
@@ -76,18 +78,18 @@ describe("SuccessState", () => {
     expect(whatsappFirst).toHaveTextContent(/Chat with a representative on WhatsApp/);
     expect(screen.getByText("Or book a time that suits you (optional)")).toBeVisible();
     const choices = document.querySelector(".success-choice")!;
-    expect([...choices.children].map((child) => child.textContent)).toEqual([
-      "Book a video call demo",
-      "Book a store visit",
+    expect([...choices.querySelectorAll(".booking-option-title")].map((title) => title.textContent)).toEqual([
+      "Video call demo",
+      "Store visit",
     ]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Book a store visit" }));
+    fireEvent.click(screen.getByRole("button", { name: /Store visit/ }));
     const whatsapp = screen.getByRole("link", { name: /Chat with a representative on WhatsApp/ });
     whatsapp.addEventListener("click", (event) => event.preventDefault());
     fireEvent.click(whatsapp);
 
     // WhatsApp neither closes nor swaps the scheduler the customer already chose.
-    expect(screen.getByRole("region", { name: "Book a store visit" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /Store visit/ })).toBeInTheDocument();
     expect(track).toHaveBeenCalledWith("whatsapp_contact_clicked");
     expect(track).toHaveBeenCalledTimes(2);
   });
@@ -122,7 +124,7 @@ describe("SuccessState", () => {
     calendly("calendly.event_scheduled");
     expect(track).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Book a video call demo" }));
+    fireEvent.click(screen.getByRole("button", { name: /Video call demo/ }));
     expect(track).toHaveBeenLastCalledWith("calendly_video_call_opened", { bookingType: "video_call" });
 
     calendly("calendly.date_and_time_selected");
@@ -131,13 +133,13 @@ describe("SuccessState", () => {
     calendly("calendly.profile_page_viewed");
     expect(track).toHaveBeenCalledTimes(2);
 
-    fireEvent.click(screen.getByRole("button", { name: "Book a store visit" }));
+    fireEvent.click(screen.getByRole("button", { name: /Store visit/ }));
     expect(track).toHaveBeenLastCalledWith("calendly_store_visit_opened", { bookingType: "store_visit" });
     calendly("calendly.event_scheduled");
     expect(track).toHaveBeenLastCalledWith("calendly_event_scheduled", { bookingType: "store_visit" });
 
     // Closing a scheduler does not count as opening it again.
-    fireEvent.click(screen.getByRole("button", { name: "Book a store visit" }));
+    fireEvent.click(screen.getByRole("button", { name: /Store visit/ }));
     expect(track).toHaveBeenCalledTimes(4);
   });
 

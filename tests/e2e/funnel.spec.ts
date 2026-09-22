@@ -40,7 +40,7 @@ test("valid context captures a lead and shows only generic confirmation", async 
   // The booking choice is offered by name; the piece behind it still is not.
   // (The wa.me href carries the product id on purpose — see SuccessState's
   // own test that its pre-filled text never reaches the page.)
-  await expect(page.locator(".success-booking .cta-link")).toHaveCount(3);
+  await expect(page.locator(".success-booking .cta-whatsapp, .booking-option")).toHaveCount(3);
 });
 
 test("a repeat phone creates another enquiry without exposing the new product", async ({ page }) => {
@@ -166,7 +166,7 @@ test("nothing overflows a 360px phone, and the booking choice stacks full-width"
   await expect(page.getByRole("heading", { name: /benefit is unlocked/i })).toBeVisible();
 
   // All three choices are offered (WhatsApp first), stacked one per row and full width.
-  const choices = page.locator(".success-booking .cta-link");
+  const choices = page.locator(".success-booking .cta-whatsapp, .booking-option");
   await expect(choices).toHaveCount(3);
   const boxes = await choices.evaluateAll((nodes) =>
     nodes.map((node) => {
@@ -177,17 +177,17 @@ test("nothing overflows a 360px phone, and the booking choice stacks full-width"
   expect(new Set(boxes.map((box) => Math.round(box.top))).size).toBe(3);
   for (const box of boxes) expect(box.width).toBeGreaterThan(280);
 
-  // Choosing one mounts a single scheduler that fits the viewport.
-  await page.getByRole("button", { name: "Book a video call demo" }).click();
-  const embed = page.locator(".calendly-embed");
+  // Choosing one shows a single scheduler that fits the viewport.
+  await page.getByRole("button", { name: /Video call demo/ }).click();
+  const embed = page.locator(".booking-panel:not(.is-preloading) .calendly-embed");
   await expect(embed).toHaveCount(1);
   expect(await embed.evaluate((node) => node.getBoundingClientRect().width)).toBeLessThanOrEqual(360);
   await expect.poll(overflows).toBe(false);
 
-  // Swapping replaces it rather than opening a second one.
-  await page.getByRole("button", { name: "Book a store visit" }).click();
-  await expect(page.locator(".calendly-embed")).toHaveCount(1);
-  await expect(page.getByRole("region", { name: "Book a store visit" })).toBeVisible();
+  // Swapping replaces it rather than showing a second one.
+  await page.getByRole("button", { name: /Store visit/ }).click();
+  await expect(page.locator(".booking-panel:not(.is-preloading) .calendly-embed")).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Store visit" })).toBeVisible();
   await expect.poll(overflows).toBe(false);
 });
 
