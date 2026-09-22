@@ -131,7 +131,11 @@ describe("parseServerEnv", () => {
   it("configures the Bookings tab and the Calendly webhook", () => {
     const defaults = parseServerEnv({ ...base, NODE_ENV: "test" });
     expect(defaults.google.sheets.bookings).toBe("Bookings");
-    expect(defaults.calendly).toEqual({ webhookSigningKey: undefined, eventTypes: { videoCall: [], storeVisit: [] } });
+    expect(defaults.calendly).toEqual({
+      webhookSigningKey: undefined,
+      eventTypes: { videoCall: [], storeVisit: [] },
+      defaultLinks: { videoUrl: undefined, storeUrl: undefined },
+    });
 
     const configured = parseServerEnv({
       ...base,
@@ -140,6 +144,8 @@ describe("parseServerEnv", () => {
       CALENDLY_WEBHOOK_SIGNING_KEY: "whsec",
       CALENDLY_VIDEO_EVENT_TYPES: "https://api.calendly.com/event_types/AAA, https://api.calendly.com/event_types/BBB",
       CALENDLY_STORE_EVENT_TYPES: "https://api.calendly.com/event_types/CCC",
+      CALENDLY_VIDEO_URL: "https://calendly.com/mk/video-demo",
+      CALENDLY_STORE_URL: "https://calendly.com/mk/store-visit",
     });
     expect(configured.google.sheets.bookings).toBe("Calendly_Bookings");
     expect(configured.calendly).toEqual({
@@ -148,7 +154,14 @@ describe("parseServerEnv", () => {
         videoCall: ["https://api.calendly.com/event_types/AAA", "https://api.calendly.com/event_types/BBB"],
         storeVisit: ["https://api.calendly.com/event_types/CCC"],
       },
+      defaultLinks: {
+        videoUrl: "https://calendly.com/mk/video-demo",
+        storeUrl: "https://calendly.com/mk/store-visit",
+      },
     });
+    expect(() =>
+      parseServerEnv({ ...base, NODE_ENV: "test", CALENDLY_STORE_URL: "https://example.com/book" }),
+    ).toThrow(/calendly\.com/);
     expect(() =>
       parseServerEnv({ ...base, NODE_ENV: "test", CALENDLY_VIDEO_EVENT_TYPES: "https://calendly.com/mk/video" }),
     ).toThrow(/event_types/);

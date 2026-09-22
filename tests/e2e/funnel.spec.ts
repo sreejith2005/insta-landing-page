@@ -40,7 +40,7 @@ test("valid context captures a lead and shows only generic confirmation", async 
   // The booking choice is offered by name; the piece behind it still is not.
   // (The wa.me href carries the product id on purpose — see SuccessState's
   // own test that its pre-filled text never reaches the page.)
-  await expect(page.locator(".success-choice > *")).toHaveCount(3);
+  await expect(page.locator(".success-booking .cta-link")).toHaveCount(3);
 });
 
 test("a repeat phone creates another enquiry without exposing the new product", async ({ page }) => {
@@ -165,8 +165,8 @@ test("nothing overflows a 360px phone, and the booking choice stacks full-width"
   await submitLead(page, "9822223333");
   await expect(page.getByRole("heading", { name: /benefit is unlocked/i })).toBeVisible();
 
-  // All three choices are offered, stacked one per row and full width.
-  const choices = page.locator(".success-choice > *");
+  // All three choices are offered (WhatsApp first), stacked one per row and full width.
+  const choices = page.locator(".success-booking .cta-link");
   await expect(choices).toHaveCount(3);
   const boxes = await choices.evaluateAll((nodes) =>
     nodes.map((node) => {

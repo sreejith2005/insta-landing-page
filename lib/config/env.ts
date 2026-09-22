@@ -36,6 +36,16 @@ const optionalWhatsAppNumber = z
     message: "must be a WhatsApp number with country code, e.g. 919876543210",
   });
 
+/** Site-wide Calendly scheduling link; must be a plain https://calendly.com/... URL to embed. */
+const optionalCalendlyUrl = z
+  .string()
+  .trim()
+  .optional()
+  .transform((value) => (value ? value : undefined))
+  .refine((value) => value === undefined || /^https:\/\/calendly\.com\/[^\s"'<>]+$/.test(value), {
+    message: "must be an https://calendly.com/... scheduling link",
+  });
+
 /** Comma-separated Calendly event type URIs, e.g. https://api.calendly.com/event_types/AAAA. */
 const eventTypeUris = z
   .string()
@@ -83,6 +93,9 @@ const rawSchema = z.object({
   /** Event types that are video calls / store visits; decides each booking's `booking_type`. */
   CALENDLY_VIDEO_EVENT_TYPES: eventTypeUris,
   CALENDLY_STORE_EVENT_TYPES: eventTypeUris,
+  /** Default booking links, used when the product row has no calendly_video_url / calendly_store_url. */
+  CALENDLY_VIDEO_URL: optionalCalendlyUrl,
+  CALENDLY_STORE_URL: optionalCalendlyUrl,
   ASSISTED_SUPPORT_URL: optionalHttpsUrl,
   /** CRM WhatsApp number for the post-enquiry "Chat with us" button. Unset hides the button. */
   CRM_WHATSAPP_NUMBER: optionalWhatsAppNumber,
@@ -140,6 +153,10 @@ export function parseServerEnv(input: Record<string, string | undefined>) {
       eventTypes: {
         videoCall: raw.CALENDLY_VIDEO_EVENT_TYPES,
         storeVisit: raw.CALENDLY_STORE_EVENT_TYPES,
+      },
+      defaultLinks: {
+        videoUrl: raw.CALENDLY_VIDEO_URL,
+        storeUrl: raw.CALENDLY_STORE_URL,
       },
     },
     inquiryCount: {

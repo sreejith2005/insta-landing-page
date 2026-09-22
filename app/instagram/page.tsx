@@ -145,9 +145,10 @@ export default async function InstagramPage({ searchParams }: { searchParams: Pr
           secondVideo: resolveBrandVideo(runtime.secondVideoUrl, undefined, secondVideoConfig),
           // Only the two booking links and the WhatsApp link leave the server;
           // the image URL and the rest of the product record stay internal.
+          // A product's own Calendly link wins over the site-wide default.
           booking: {
-            videoUrl: calendlyUrl(resolved.context.calendlyVideoUrl),
-            storeUrl: calendlyUrl(resolved.context.calendlyStoreUrl),
+            videoUrl: calendlyUrl(resolved.context.calendlyVideoUrl) ?? env.calendly.defaultLinks.videoUrl,
+            storeUrl: calendlyUrl(resolved.context.calendlyStoreUrl) ?? env.calendly.defaultLinks.storeUrl,
           },
           whatsappUrl: whatsappContactUrl(env.crmWhatsappNumber, resolved.context),
           socialProof: proof,

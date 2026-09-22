@@ -52,11 +52,15 @@ describe("SuccessState", () => {
     expect(screen.queryByRole("button", { name: "Book a video call demo" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Book a store visit" })).toBeVisible();
 
+    // Without WhatsApp the booking choices still say they are optional.
+    expect(screen.getByText("Book a time that suits you (optional)")).toBeVisible();
+
     rerender(<SuccessState isRepeatCustomer={false} booking={{}} />);
     expect(screen.queryByRole("button", { name: /Book a/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/optional/)).not.toBeInTheDocument();
   });
 
-  it("presents all three choices in one row and keeps WhatsApp independent of the scheduler", () => {
+  it("leads with WhatsApp, marks booking optional, and keeps WhatsApp independent of the scheduler", () => {
     const track = vi.fn();
     render(
       <SuccessState
@@ -66,13 +70,19 @@ describe("SuccessState", () => {
         track={track}
       />,
     );
+    const booking = document.querySelector(".success-booking")!;
+    const whatsappFirst = booking.firstElementChild!;
+    expect(whatsappFirst.tagName).toBe("A");
+    expect(whatsappFirst).toHaveTextContent(/Chat with a representative on WhatsApp/);
+    expect(screen.getByText("Or book a time that suits you (optional)")).toBeVisible();
     const choices = document.querySelector(".success-choice")!;
-    expect(
-      [...choices.children].map((child) => child.textContent?.replace("↗", "").trim()),
-    ).toEqual(["Book a video call demo", "Book a store visit", "Chat on WhatsApp"]);
+    expect([...choices.children].map((child) => child.textContent)).toEqual([
+      "Book a video call demo",
+      "Book a store visit",
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Book a store visit" }));
-    const whatsapp = screen.getByRole("link", { name: /Chat on WhatsApp/ });
+    const whatsapp = screen.getByRole("link", { name: /Chat with a representative on WhatsApp/ });
     whatsapp.addEventListener("click", (event) => event.preventDefault());
     fireEvent.click(whatsapp);
 
@@ -85,7 +95,7 @@ describe("SuccessState", () => {
   it("offers WhatsApp only with a configured link and never shows its pre-filled product text", () => {
     const whatsappUrl = `https://wa.me/919876543210?text=${encodeURIComponent("Hi, I'm interested in Rose Bracelet (MKBR639)")}`;
     const { rerender } = render(<SuccessState isRepeatCustomer={false} whatsappUrl={whatsappUrl} />);
-    const link = screen.getByRole("link", { name: /Chat on WhatsApp/ });
+    const link = screen.getByRole("link", { name: /Chat with a representative on WhatsApp/ });
     expect(link).toHaveAttribute("href", whatsappUrl);
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
     expect(document.body.textContent).not.toMatch(/Rose Bracelet|MKBR639/);
@@ -134,7 +144,7 @@ describe("SuccessState", () => {
   it("tracks the WhatsApp click", () => {
     const track = vi.fn();
     render(<SuccessState isRepeatCustomer={false} whatsappUrl="https://wa.me/919876543210?text=Hi" track={track} />);
-    const link = screen.getByRole("link", { name: /Chat on WhatsApp/ });
+    const link = screen.getByRole("link", { name: /Chat with a representative on WhatsApp/ });
     link.addEventListener("click", (event) => event.preventDefault());
     fireEvent.click(link);
     expect(track).toHaveBeenCalledWith("whatsapp_contact_clicked");

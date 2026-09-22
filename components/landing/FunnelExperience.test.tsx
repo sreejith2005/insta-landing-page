@@ -210,7 +210,7 @@ describe("FunnelExperience", () => {
     await userEvent.click(screen.getByRole("button", { name: "Unlock My 30% Benefit" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Book a video call demo" }));
-    expect(screen.getByRole("link", { name: /Chat on WhatsApp/ })).toBeVisible();
+    expect(screen.getByRole("link", { name: /Chat with a representative on WhatsApp/ })).toBeVisible();
     expect(document.body.textContent).not.toMatch(/Rose Bracelet|MKBR639/);
 
     await waitFor(() => {

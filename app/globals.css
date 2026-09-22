@@ -838,14 +838,27 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; 
 .success-discount { display: inline-flex; align-items: center; gap: 8px; margin: 16px 0 0; padding: 7px 14px; border: 1px solid rgba(217,183,116,.45); border-radius: 999px; color: var(--gold-light); font-size: 13px; }
 .success-discount span { color: var(--gold); font-size: 9px; }
 .success-contact { max-width: 540px; margin: 14px auto 0; color: var(--muted-dark); font-size: 14px; line-height: 1.6; }
-.success-booking { margin: 24px auto 0; }
-/* Choice row: one full-width column on phones, three side by side from 640px. */
+.success-booking { max-width: 640px; margin: 24px auto 0; }
+/* WhatsApp leads: full width, taller, with an icon and a hint line. */
+.success-whatsapp { width: 100%; min-height: 72px; padding: 12px 20px; gap: 14px; justify-content: flex-start; text-align: left; box-shadow: 0 14px 34px rgba(37,211,102,.18); }
+.success-whatsapp:hover { box-shadow: 0 16px 38px rgba(37,211,102,.28); }
+.whatsapp-icon { flex: none; width: 30px; height: 30px; }
+.success-whatsapp-text { flex: 1; display: grid; gap: 4px; min-width: 0; }
+.success-whatsapp-label { font-size: 13px; line-height: 1.35; text-wrap: balance; }
+.success-whatsapp-hint { color: rgba(255,255,255,.78); font-size: 11.5px; font-weight: 500; letter-spacing: .03em; text-transform: none; }
+.success-booking-divider { display: flex; align-items: center; gap: 12px; margin: 22px 0 12px; color: var(--muted-dark); font-size: 12px; letter-spacing: .06em; }
+.success-booking-divider::before,
+.success-booking-divider::after { flex: 1; height: 1px; background: var(--line-dark); content: ""; }
+/* Booking choices: one column on phones, side by side from 480px. */
 .success-booking-actions { display: grid; gap: 10px; }
 .success-booking-actions .cta-link { width: 100%; max-width: none; cursor: pointer; text-align: center; }
-.success-booking-actions .cta-link[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--charcoal), 0 0 0 3px var(--gold); }
-@media (min-width: 640px) {
+.success-booking-actions .cta-link[aria-expanded="true"] { border-color: var(--gold); background: rgba(217,183,116,.14); box-shadow: 0 0 0 1px var(--gold); }
+@media (min-width: 480px) {
   .success-choice { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
 }
+/* Secondary CTA on dark bands: gold outline, quieter than the solid CTAs. */
+.cta-outline { min-height: 50px; border-color: rgba(217,183,116,.55); background: transparent; color: var(--gold-light); }
+.cta-outline:hover { border-color: var(--gold); background: rgba(217,183,116,.1); box-shadow: none; }
 .cta-whatsapp { border-color: #25d366; background: #1f7a4a; color: #fff; }
 .cta-whatsapp:hover { background: #25a35a; }
 .cta-whatsapp .cta-arrow { color: #fff; }

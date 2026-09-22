@@ -4,11 +4,11 @@ After an enquiry is accepted, the success state offers up to three actions. None
 
 | Action | Shown when | Browser event(s) |
 | --- | --- | --- |
-| Book a video call | Product row has a `https://calendly.com/...` `calendly_video_url` | `calendly_video_call_opened`, then `calendly_date_time_selected` / `calendly_event_scheduled` |
-| Book a store visit | Product row has a `https://calendly.com/...` `calendly_store_url` | `calendly_store_visit_opened`, then the same two |
-| Chat with us on WhatsApp | `CRM_WHATSAPP_NUMBER` is set | `whatsapp_contact_clicked` |
+| Book a video call demo | Product row has a `https://calendly.com/...` `calendly_video_url`, or `CALENDLY_VIDEO_URL` is set | `calendly_video_call_opened`, then `calendly_date_time_selected` / `calendly_event_scheduled` |
+| Book a store visit | Product row has a `https://calendly.com/...` `calendly_store_url`, or `CALENDLY_STORE_URL` is set | `calendly_store_visit_opened`, then the same two |
+| Chat with a representative on WhatsApp | `CRM_WHATSAPP_NUMBER` is set | `whatsapp_contact_clicked` |
 
-The booking buttons open Calendly's official inline embed (`assets.calendly.com/assets/external/widget.js`). The WhatsApp link is a `wa.me` deep link whose message comes from `whatsappMessageTemplate` in `config/experience.ts`, filled in with the product name and ID.
+WhatsApp is the primary action: it is shown first, full width. The two booking buttons sit below it under an "(optional)" divider, and a product row's own link overrides the `CALENDLY_*_URL` default. The booking buttons open Calendly's official inline embed (`assets.calendly.com/assets/external/widget.js`). The WhatsApp link is a `wa.me` deep link whose message comes from `whatsappMessageTemplate` in `config/experience.ts`, filled in with the product name and ID.
 
 ## Browser events are signals, not bookings
 
