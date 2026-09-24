@@ -28,7 +28,7 @@ test("pass: enquiry → store pass → staff scan → visit → purchase → alr
   const code = (await page.locator(".pass-card-code strong").textContent())!.trim();
   expect(code).toMatch(/^MK30-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
   const qrPath = (await qr.getAttribute("src"))!;
-  const passPath = qrPath.replace(/\/qr$/, "");
+  const passPath = qrPath.replace(/\/qr(\?.*)?$/, "");
 
   // The QR is a real SVG that encodes the staff check link.
   const svg = await request.get(qrPath);

@@ -6,6 +6,7 @@ import { PassCard } from "@/components/pass/PassCard";
 import { passConfig } from "@/config/pass";
 import { serverEnv } from "@/lib/config/env";
 import { verifyPassToken } from "@/lib/passes/code";
+import { passQrSrc } from "@/lib/passes/issue";
 import { formatPassDateTime } from "@/lib/passes/format";
 import { passStatus } from "@/lib/passes/status";
 import { repository } from "@/lib/providers/repository";
@@ -62,7 +63,7 @@ export default async function PassPage({ params }: { params: Promise<{ token: st
       <main className="pass-page">
         <PassCard
           code={pass.passCode}
-          qrSrc={`/p/${token}/qr`}
+          qrSrc={passQrSrc(`/p/${token}`)}
           validUntil={status.validUntil.toISOString()}
           firstName={pass.customerName}
           state={status.state}

@@ -38,7 +38,7 @@ describe("submitLead with store passes", () => {
   it("issues one pass per enquiry, stored with the enquiry, and keeps it on replay", async () => {
     const { repository, code, result } = await issued();
     expect(result.pass?.path).toMatch(new RegExp(`^/p/${code}\\.`));
-    expect(result.pass?.qrPath).toBe(`${result.pass?.path}/qr`);
+    expect(result.pass?.qrPath).toBe(`${result.pass?.path}/qr?v=2`);
     expect(repository.snapshot().inquiries[0].passCode).toBe(code);
     expect(repository.snapshot().events.map((event) => event.eventName)).toContain("pass_issued");
 

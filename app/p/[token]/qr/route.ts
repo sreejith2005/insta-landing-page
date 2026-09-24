@@ -24,8 +24,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   return new Response(svg, {
     headers: {
       "Content-Type": "image/svg+xml",
-      // A token's QR never changes.
-      "Cache-Control": "public, max-age=31536000, immutable",
+      // Short on purpose: what a QR opens has changed before (see passQrSrc).
+      "Cache-Control": "public, max-age=3600",
     },
   });
 }
