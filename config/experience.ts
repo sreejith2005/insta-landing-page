@@ -94,12 +94,11 @@ export const trustBarConfig = {
 } as const;
 
 /**
- * Self-hosted brand film. Drop the approved file at `src` (and an optional
- * poster at `poster`) under /public and it is picked up automatically. The
- * NEXT_PUBLIC_BRAND_VIDEO_URL env var (hosted MP4/YouTube/Vimeo) takes priority.
+ * Self-hosted brand film: `src` (and optional `poster`) are /public paths and
+ * must be committed. The NEXT_PUBLIC_BRAND_VIDEO_URL env var (hosted
+ * MP4/YouTube/Vimeo) takes priority. Set `src` to "" to hide the section.
  */
 export const brandVideoConfig = {
-  /** Used automatically in development when NEXT_PUBLIC_BRAND_VIDEO_URL is unset. */
   src: "/brand/mk-jewels-intro.mp4",
   poster: "/brand/video-poster.jpg",
   title: "A look inside MK Jewels",
@@ -111,14 +110,13 @@ export const brandVideoConfig = {
 } as const;
 
 /**
- * Second film, shown below the enquiry form / success state. Same resolution
- * rules as the brand film: NEXT_PUBLIC_SECOND_VIDEO_URL (hosted MP4/YouTube/
- * Vimeo or a /public path) wins; without it, development uses `src` if that
- * file exists and production hides the section. Plays only when pressed.
+ * Second film, shown below the enquiry form / success state. Same rules as the
+ * brand film (NEXT_PUBLIC_SECOND_VIDEO_URL wins). Empty until a file is added
+ * under /public/brand — set `src` (and `poster`) then. Plays only when pressed.
  */
 export const secondVideoConfig = {
-  src: "/brand/mk-jewels-second-film.mp4",
-  poster: "/brand/second-film-poster.jpg",
+  src: "",
+  poster: "",
   title: "MK Jewels high jewellery",
   eyebrow: "The MK Jewels collection",
   headingLines: ["Made to be noticed.", "Made to be kept."],

@@ -6,40 +6,38 @@ import { describe, expect, it } from "vitest";
 import { brandVideoConfig, secondVideoConfig } from "@/config/experience";
 import { resolveBrandVideo } from "./brand-video";
 
-const suppliedFilm = existsSync(join(process.cwd(), "public", brandVideoConfig.src));
-
 describe("resolveBrandVideo", () => {
-  it.runIf(suppliedFilm)("plays a local /brand/*.mp4 configured by path", () => {
-    expect(resolveBrandVideo("/brand/mk-jewels-intro.mp4", "production")).toMatchObject({
+  it("ships the configured brand film and poster in /public", () => {
+    expect(existsSync(join(process.cwd(), "public", brandVideoConfig.src))).toBe(true);
+    expect(existsSync(join(process.cwd(), "public", brandVideoConfig.poster))).toBe(true);
+  });
+
+  it("uses the configured film without any env var", () => {
+    expect(resolveBrandVideo(undefined)).toMatchObject({
       kind: "file",
-      src: "/brand/mk-jewels-intro.mp4",
+      src: brandVideoConfig.src,
+      poster: brandVideoConfig.poster,
       aspectRatio: "16 / 9",
     });
   });
 
-  it.runIf(suppliedFilm)("uses the supplied film automatically in development", () => {
-    expect(resolveBrandVideo(undefined, "development")?.src).toBe(brandVideoConfig.src);
+  it("lets an env URL override the configured film", () => {
+    expect(resolveBrandVideo("/brand/other.mp4")?.src).toBe("/brand/other.mp4");
   });
 
-  it("requires explicit configuration in production and hides cleanly without it", () => {
-    expect(resolveBrandVideo(undefined, "production")).toBeNull();
-  });
-
-  it("hides a configured local path whose file is missing", () => {
-    expect(resolveBrandVideo("/brand/does-not-exist.mp4", "development")).toBeNull();
+  it("hides a slot with no film configured", () => {
+    expect(resolveBrandVideo(undefined, { ...secondVideoConfig, src: "" })).toBeNull();
+    expect(resolveBrandVideo("/../secret.mp4")).toBeNull();
   });
 
   it("recognises hosted YouTube, Vimeo and MP4 URLs", () => {
-    expect(resolveBrandVideo("https://youtu.be/abcdefghijk", "production")).toMatchObject({ kind: "youtube", src: "abcdefghijk" });
-    expect(resolveBrandVideo("https://vimeo.com/123456789", "production")).toMatchObject({ kind: "vimeo", src: "123456789" });
-    expect(resolveBrandVideo("https://cdn.example.com/film.mp4", "production")).toMatchObject({ kind: "file" });
+    expect(resolveBrandVideo("https://youtu.be/abcdefghijk")).toMatchObject({ kind: "youtube", src: "abcdefghijk" });
+    expect(resolveBrandVideo("https://vimeo.com/123456789")).toMatchObject({ kind: "vimeo", src: "123456789" });
+    expect(resolveBrandVideo("https://cdn.example.com/film.mp4")).toMatchObject({ kind: "file" });
   });
 
   it("resolves another film slot from its own config", () => {
-    const second = { ...secondVideoConfig, src: "/brand/does-not-exist.mp4" };
-    expect(resolveBrandVideo(undefined, "development", second)).toBeNull();
-    expect(resolveBrandVideo(undefined, "production", second)).toBeNull();
-    expect(resolveBrandVideo("https://vimeo.com/123456789", "production", secondVideoConfig)).toMatchObject({
+    expect(resolveBrandVideo("https://vimeo.com/123456789", secondVideoConfig)).toMatchObject({
       kind: "vimeo",
       title: secondVideoConfig.title,
     });

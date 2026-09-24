@@ -1,9 +1,6 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-
 import { brandVideoConfig } from "@/config/experience";
 
-/** Where a film's local fallback, poster, title and shape come from. */
+/** Where a film's local file, poster, title and shape come from. Empty `src`/`poster` = none. */
 export type VideoConfig = { src: string; poster: string; title: string; aspectRatio: string };
 
 export type BrandVideoSource = {
@@ -14,19 +11,6 @@ export type BrandVideoSource = {
   title: string;
   aspectRatio: string;
 };
-
-const publicFileCache = new Map<string, boolean>();
-
-/** Checks a root-relative path against /public once per server process. */
-function publicFileExists(path: string) {
-  if (!path.startsWith("/") || path.includes("..")) return false;
-  let exists = publicFileCache.get(path);
-  if (exists === undefined) {
-    exists = existsSync(join(process.cwd(), "public", path));
-    publicFileCache.set(path, exists);
-  }
-  return exists;
-}
 
 function providerSource(url: URL): Pick<BrandVideoSource, "kind" | "src"> {
   if (url.hostname === "youtu.be") return { kind: "youtube", src: url.pathname.slice(1) };
@@ -43,32 +27,23 @@ function providerSource(url: URL): Pick<BrandVideoSource, "kind" | "src"> {
 
 /**
  * Resolves a film (the brand film by default; pass `config` for another slot).
- * An explicit env URL (https URL or /public path) always wins. Without one,
- * development automatically uses `config.src` when that file exists;
- * production requires the env var so a stray local file is never published by
- * accident.
+ * An env URL (https URL or /public path) wins; otherwise `config.src` is used,
+ * and an empty `src` hides the section.
+ *
+ * No filesystem check here: on Vercel, /public is served from the CDN and is
+ * not inside the server function, so the file would always look "missing".
  */
-export function resolveBrandVideo(
-  envUrl: string | undefined,
-  nodeEnv: string | undefined = process.env.NODE_ENV,
-  config: VideoConfig = brandVideoConfig,
-): BrandVideoSource | null {
-  const poster = publicFileExists(config.poster) ? config.poster : undefined;
-  const base = { poster, title: config.title, aspectRatio: config.aspectRatio };
+export function resolveBrandVideo(envUrl: string | undefined, config: VideoConfig = brandVideoConfig): BrandVideoSource | null {
+  const base = { poster: config.poster || undefined, title: config.title, aspectRatio: config.aspectRatio };
+  const url = envUrl || config.src;
+  if (!url) return null;
+  if (url.startsWith("/")) return url.includes("..") ? null : { ...base, kind: "file", src: url };
 
-  if (envUrl) {
-    if (envUrl.startsWith("/")) {
-      return publicFileExists(envUrl) ? { ...base, kind: "file", src: envUrl } : null;
-    }
-    try {
-      const source = providerSource(new URL(envUrl));
-      if (source.kind !== "file" && !/^[A-Za-z0-9_-]{6,20}$/.test(source.src)) return null;
-      return { ...base, ...source };
-    } catch {
-      return null;
-    }
+  try {
+    const source = providerSource(new URL(url));
+    if (source.kind !== "file" && !/^[A-Za-z0-9_-]{6,20}$/.test(source.src)) return null;
+    return { ...base, ...source };
+  } catch {
+    return null;
   }
-
-  if (nodeEnv === "production") return null;
-  return publicFileExists(config.src) ? { ...base, kind: "file", src: config.src } : null;
 }
