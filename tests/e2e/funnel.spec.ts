@@ -40,7 +40,8 @@ test("valid context captures a lead and shows only generic confirmation", async 
   // The booking choice is offered by name; the piece behind it still is not.
   // (The wa.me href carries the product id on purpose — see SuccessState's
   // own test that its pre-filled text never reaches the page.)
-  await expect(page.locator(".success-booking .cta-whatsapp, .booking-option")).toHaveCount(3);
+  // WhatsApp, the store pass, and the two booking choices.
+  await expect(page.locator(".success-booking .cta-whatsapp, .booking-option")).toHaveCount(4);
 });
 
 test("a repeat phone creates another enquiry without exposing the new product", async ({ page }) => {
@@ -165,17 +166,23 @@ test("nothing overflows a 360px phone, and the booking choice stacks full-width"
   await submitLead(page, "9822223333");
   await expect(page.getByRole("heading", { name: /benefit is unlocked/i })).toBeVisible();
 
-  // All three choices are offered (WhatsApp first), stacked one per row and full width.
+  // All four choices are offered (WhatsApp first, then the store pass), stacked one per row and full width.
   const choices = page.locator(".success-booking .cta-whatsapp, .booking-option");
-  await expect(choices).toHaveCount(3);
+  await expect(choices).toHaveCount(4);
   const boxes = await choices.evaluateAll((nodes) =>
     nodes.map((node) => {
       const { width, left, top } = node.getBoundingClientRect();
       return { width, left, top };
     }),
   );
-  expect(new Set(boxes.map((box) => Math.round(box.top))).size).toBe(3);
+  expect(new Set(boxes.map((box) => Math.round(box.top))).size).toBe(4);
   for (const box of boxes) expect(box.width).toBeGreaterThan(280);
+
+  // The store pass opens in place and fits the phone.
+  await page.getByRole("button", { name: /planning to visit our store/i }).click();
+  await expect(page.getByRole("img", { name: /QR code for store pass/ })).toBeVisible();
+  expect(await page.locator(".pass-card").evaluate((node) => node.getBoundingClientRect().width)).toBeLessThanOrEqual(360);
+  await expect.poll(overflows).toBe(false);
 
   // Choosing one shows a single scheduler that fits the viewport.
   await page.getByRole("button", { name: /Video call demo/ }).click();

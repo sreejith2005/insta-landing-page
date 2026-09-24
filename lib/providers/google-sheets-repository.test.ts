@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { LeadSubmissionInput } from "@/lib/validation/schemas";
 
 import {
+  columnLetter,
   countMatchingInquiries,
   defaultHeaders,
   fmsDateOnly,
@@ -309,6 +310,8 @@ describe("GoogleSheetsRepository Instagram FMS dual-write", () => {
     events: "Events",
     instagramFms: "Instagram_FMS" as string | undefined,
     bookings: "Bookings",
+    storeVisits: "Store_Visits",
+    stores: "Stores",
   };
   const headerRows: Record<string, string[][]> = {
     Customers: [[...defaultHeaders.customers]],
@@ -400,8 +403,9 @@ describe("GoogleSheetsRepository Instagram FMS dual-write", () => {
     expect(inquiry.inquiry_id).toMatch(/^inq_/);
   });
 
-  it("keeps the FMS tab at exactly the team's 15 headers", () => {
-    expect(defaultHeaders.instagramFms).toHaveLength(15);
+  it("keeps the FMS tab at exactly the team's 15 headers plus BENEFIT CODE", () => {
+    expect(defaultHeaders.instagramFms).toHaveLength(16);
+    expect(defaultHeaders.instagramFms.at(-1)).toBe("BENEFIT CODE");
     expect(defaultHeaders.instagramFms).not.toContain("reference_number");
     expect(defaultHeaders.instagramFms.some((header) => /booking|scheduled|calendly/i.test(header))).toBe(false);
   });
@@ -538,6 +542,8 @@ describe("GoogleSheetsRepository bookings", () => {
         events: "Events",
         instagramFms: undefined,
         bookings: "Bookings",
+        storeVisits: "Store_Visits",
+        stores: "Stores",
       },
     });
     Object.assign(repository, { client });
@@ -599,6 +605,8 @@ describe("GoogleSheetsRepository bookings", () => {
         events: "Events",
         instagramFms: undefined,
         bookings: "Bookings",
+        storeVisits: "Store_Visits",
+        stores: "Stores",
       },
     });
     Object.assign(repository, { client });
@@ -615,5 +623,132 @@ describe("GoogleSheetsRepository bookings", () => {
       product_id: "",
       reference_number: "",
     });
+  });
+});
+
+describe("GoogleSheetsRepository store passes", () => {
+  const sheets = {
+    products: "Products",
+    reelMap: undefined,
+    customers: "Customers",
+    inquiries: "Inquiries",
+    events: "Events",
+    instagramFms: "Instagram_FMS",
+    bookings: "Bookings",
+    storeVisits: "Store_Visits",
+    stores: "Stores",
+  };
+  const lead: LeadSubmissionInput = {
+    fullName: "Ananya Shah",
+    mobileNumber: "9876543210",
+    pinCode: "400001",
+    city: "Mumbai",
+    productId: "MK001",
+    reelId: "R101",
+    campaignId: "RAKHI26",
+    source: "instagram",
+    sessionId: "d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4",
+    idempotencyKey: "lead:d17d3694-e88b-42b1-a7ae-f4c4f5f32ef4:MK001:R101:RAKHI26",
+    landingPageVersion: "phase1",
+  };
+  const product = { productId: "MK001", productName: "Internal name", reelId: "R101", campaignId: "RAKHI26" };
+
+  /** A fake sheet whose tabs hold header rows (and appended rows) in memory. */
+  function fakeSheet(tabs: Record<string, string[][]>) {
+    const tabOf = (range: string) => /^'(.*)'!/.exec(range)![1];
+    const updates: { range: string; values: string[][] }[] = [];
+    const client = {
+      spreadsheets: {
+        values: {
+          get: vi.fn(async ({ range }: { range: string }) => {
+            const rows = tabs[tabOf(range)] ?? [];
+            return { data: { values: range.endsWith("!1:1") ? rows.slice(0, 1) : rows } };
+          }),
+          append: vi.fn(async ({ range, requestBody }: { range: string; requestBody: { values: string[][] } }) => {
+            (tabs[tabOf(range)] ??= []).push(requestBody.values[0]);
+            return {};
+          }),
+          update: vi.fn(async ({ range, requestBody }: { range: string; requestBody: { values: string[][] } }) => {
+            updates.push({ range, values: requestBody.values });
+            const rows = (tabs[tabOf(range)] ??= [[]]);
+            rows[0] = [...(rows[0] ?? []), ...requestBody.values[0]];
+            return {};
+          }),
+        },
+      },
+    };
+    const repository = new GoogleSheetsRepository(
+      { serviceAccountEmail: "svc@example.iam.gserviceaccount.com", privateKey: "test-key", spreadsheetId: "sheet-id", sheets },
+      { referenceNumber: async () => "MK-2609-0042" },
+    );
+    Object.assign(repository, { client });
+    const rowsOf = (tab: string) => {
+      const [headers = [], ...rows] = tabs[tab] ?? [];
+      return rows.map((row) => headerRecord(headers, row));
+    };
+    return { repository, updates, rowsOf };
+  }
+
+  it("adds a missing pass_code / BENEFIT CODE column instead of dropping the code", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const withoutPassColumns = defaultHeaders.inquiries.filter((header) => header !== "pass_code");
+    const { repository, updates, rowsOf } = fakeSheet({
+      Customers: [[...defaultHeaders.customers]],
+      Inquiries: [withoutPassColumns],
+      Instagram_FMS: [defaultHeaders.instagramFms.slice(0, 15)],
+    });
+    const accepted = await repository.acceptLead(lead, product, { passCode: "MK30-7KQ4-X9MP" });
+
+    expect(accepted.passCode).toBe("MK30-7KQ4-X9MP");
+    expect(updates).toEqual([
+      { range: `'Inquiries'!${columnLetter(withoutPassColumns.length)}1`, values: [["pass_code"]] },
+      { range: "'Instagram_FMS'!P1", values: [["BENEFIT CODE"]] },
+    ]);
+    expect(rowsOf("Inquiries")[0].pass_code).toBe("MK30-7KQ4-X9MP");
+    expect(rowsOf("Instagram_FMS")[0]["BENEFIT CODE"]).toBe("MK30-7KQ4-X9MP");
+
+    const pass = await repository.findPassByCode("MK30-7KQ4-X9MP");
+    expect(pass).toMatchObject({ passCode: "MK30-7KQ4-X9MP", inquiryId: accepted.inquiryId, customerName: "Ananya Shah", reelId: "R101" });
+
+    const replay = await repository.acceptLead(lead, product, { passCode: "MK30-ZZZZ-ZZZZ" });
+    expect(replay).toMatchObject({ wasReplay: true, passCode: "MK30-7KQ4-X9MP" });
+  });
+
+  it("writes store visits with their attribution and reads them back per customer", async () => {
+    const { repository, rowsOf } = fakeSheet({ Store_Visits: [[...defaultHeaders.storeVisits]] });
+    await repository.recordStoreVisit({
+      action: "purchased",
+      store: "Bandra",
+      staffName: "Priya",
+      passCode: "MK30-7KQ4-X9MP",
+      customerName: "Ananya Shah",
+      phone: "9876543210",
+      inquiryId: "inq_1",
+      customerId: "cus_1",
+      productId: "MK001",
+      reelId: "R101",
+      campaignId: "RAKHI26",
+      invoiceNumber: "INV-1",
+      billAmount: "72000",
+    });
+    expect(rowsOf("Store_Visits")[0]).toMatchObject({ action: "purchased", store: "Bandra", reel_id: "R101", bill_amount: "72000" });
+    expect(await repository.listStoreVisits("cus_1")).toHaveLength(1);
+    expect(await repository.listStoreVisits("cus_2")).toHaveLength(0);
+  });
+
+  it("reads stores by name, PIN and on/off switch", async () => {
+    const { repository } = fakeSheet({
+      Stores: [["store", "pin", "active"], ["Bandra", "482913", "TRUE"], ["Ulhasnagar", "318842", "FALSE"], ["", "1", "TRUE"]],
+    });
+    expect(await repository.listStores()).toEqual([
+      { name: "Bandra", pin: "482913", active: true },
+      { name: "Ulhasnagar", pin: "318842", active: false },
+    ]);
+  });
+});
+
+describe("columnLetter", () => {
+  it("maps indexes to spreadsheet columns", () => {
+    expect([0, 15, 25, 26, 27, 51, 701, 702].map(columnLetter)).toEqual(["A", "P", "Z", "AA", "AB", "AZ", "ZZ", "AAA"]);
   });
 });

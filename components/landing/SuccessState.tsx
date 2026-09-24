@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
+import { PassCard } from "@/components/pass/PassCard";
 import { experienceCopy, successSteps } from "@/config/experience";
+import { passConfig } from "@/config/pass";
 import { CALENDLY_ORIGIN } from "@/lib/contact/calendly";
 import type { FunnelEventName } from "@/types/funnel";
 import { CalendlyInline } from "./CalendlyInline";
@@ -43,6 +45,66 @@ const WHATSAPP_HINT = "Fastest reply · Talk to our team directly";
 const BOOKING_DIVIDER = "Or book a time that suits you (optional)";
 const BOOKING_HEADING = "Book a time that suits you (optional)";
 
+/** The customer's store pass, as returned with the accepted enquiry. */
+export type SuccessPass = { code: string; path: string; qrPath: string; validUntil: string };
+
+/**
+ * "Planning to visit our store?" — opens the pass (QR, code, validity) in
+ * place. The pass exists from the moment the enquiry was saved; this only
+ * decides when the customer sees it.
+ */
+function StorePass({ pass, firstName, track }: { pass: SuccessPass; firstName?: string; track?: TrackSuccessEvent }) {
+  const [open, setOpen] = useState(false);
+  const card = useRef<HTMLDivElement>(null);
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      track?.("store_pass_opened");
+      requestAnimationFrame(() => card.current?.scrollIntoView?.({ behavior: "smooth", block: "center" }));
+    }
+  }
+
+  return (
+    <div className="success-pass">
+      <button
+        type="button"
+        className="booking-option store-pass-option"
+        aria-expanded={open}
+        aria-controls="store-pass"
+        onClick={toggle}
+      >
+        <span className="booking-option-icon" aria-hidden="true"><QrIcon /></span>
+        <span className="booking-option-text">
+          <span className="booking-option-title">{passConfig.revealLabel}</span>
+          <span className="booking-option-description">{passConfig.revealHint}</span>
+        </span>
+        <span className="booking-option-chevron" aria-hidden="true" />
+      </button>
+      {open ? (
+        <div id="store-pass" className="success-pass-card" ref={card}>
+          <PassCard code={pass.code} qrSrc={pass.qrPath} validUntil={pass.validUntil} firstName={firstName} />
+          <a className="success-pass-link" href={pass.path} target="_blank" rel="noopener">
+            Open my pass in a new tab
+          </a>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function QrIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1" />
+      <rect x="14" y="3.5" width="6.5" height="6.5" rx="1" />
+      <rect x="3.5" y="14" width="6.5" height="6.5" rx="1" />
+      <path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM14 18.5v2M18.5 14h2" />
+    </svg>
+  );
+}
+
 /**
  * Calendly's postMessage events → our event names. They carry no date or time,
  * only that a selection or booking happened.
@@ -66,11 +128,15 @@ function BookingOptions({
   booking,
   whatsappUrl,
   inquiryId,
+  pass,
+  firstName,
   track,
 }: {
   booking?: BookingLinks;
   whatsappUrl?: string;
   inquiryId?: string;
+  pass?: SuccessPass;
+  firstName?: string;
   track?: TrackSuccessEvent;
 }) {
   const [open, setOpen] = useState<BookingType | null>(null);
@@ -113,7 +179,7 @@ function BookingOptions({
   }, [open, track]);
 
   const actions = bookingActions.filter((action) => booking?.[action.key]);
-  if (!actions.length && !whatsappUrl) return null;
+  if (!actions.length && !whatsappUrl && !pass) return null;
 
   function choose(type: BookingType) {
     const next = open === type ? null : type;
@@ -141,6 +207,7 @@ function BookingOptions({
           <span className="cta-arrow" aria-hidden="true">↗</span>
         </a>
       ) : null}
+      {pass ? <StorePass pass={pass} firstName={firstName} track={track} /> : null}
       {actions.length ? (
         <>
           <p className="success-booking-divider">
@@ -239,6 +306,7 @@ export function SuccessState({
   booking,
   whatsappUrl,
   inquiryId,
+  pass,
   track,
 }: {
   isRepeatCustomer: boolean;
@@ -250,6 +318,8 @@ export function SuccessState({
   whatsappUrl?: string;
   /** The accepted enquiry; passed to Calendly so the booking webhook can join on it. */
   inquiryId?: string;
+  /** The store pass, shown on request under the WhatsApp button. */
+  pass?: SuccessPass;
   track?: TrackSuccessEvent;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -279,7 +349,14 @@ export function SuccessState({
             <span aria-hidden="true">◆</span> {experienceCopy.successDiscountApplied}
           </p>
           <p className="success-contact">{contactCopy || experienceCopy.representativeContact}</p>
-          <BookingOptions booking={booking} whatsappUrl={whatsappUrl} inquiryId={inquiryId} track={track} />
+          <BookingOptions
+            booking={booking}
+            whatsappUrl={whatsappUrl}
+            inquiryId={inquiryId}
+            pass={pass}
+            firstName={firstName}
+            track={track}
+          />
         </div>
       </section>
       <section className="band band-ivory success-next" aria-labelledby="next-heading">

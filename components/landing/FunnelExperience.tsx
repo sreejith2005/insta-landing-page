@@ -19,6 +19,7 @@ import { MediaProof } from "@/components/social-proof/MediaProof";
 import { Testimonials } from "@/components/social-proof/Testimonials";
 import { getSessionId } from "@/lib/attribution/session";
 import { trackFunnelEvent } from "@/lib/attribution/client-events";
+import { withPassCode } from "@/lib/contact/whatsapp";
 import type { BrandVideoSource } from "@/lib/media/brand-video";
 import type { ResolvedSocialProof } from "@/lib/social-proof/resolve-social-proof";
 import type { AcceptedInquiry, IncomingInstagramContext, InstagramDmContext } from "@/types/funnel";
@@ -128,8 +129,9 @@ export function FunnelExperience({
           contactCopy={runtime.representativeContactCopy}
           firstName={accepted.firstName}
           booking={runtime.booking}
-          whatsappUrl={runtime.whatsappUrl}
+          whatsappUrl={withPassCode(runtime.whatsappUrl, accepted.inquiry.pass?.code)}
           inquiryId={accepted.inquiry.inquiryId}
+          pass={accepted.inquiry.pass}
           track={trackSuccess}
         />
         <BelowFunnel video={secondFilm} proof={proof} submitted />

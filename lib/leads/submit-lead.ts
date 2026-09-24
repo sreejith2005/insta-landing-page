@@ -1,3 +1,6 @@
+import { logEvent } from "@/lib/log";
+import { generatePassCode } from "@/lib/passes/code";
+import { issuedPass, type PassSettings } from "@/lib/passes/issue";
 import { lookupPinCode, type PinCodeLookup } from "@/lib/pincode/lookup-pin-code";
 import { resolveProductContext } from "@/lib/products/resolve-product";
 import type { LeadSubmissionInput } from "@/lib/validation/schemas";
@@ -24,6 +27,8 @@ export async function submitLead(
   input: LeadSubmissionInput,
   repository: FunnelRepository,
   pinCodeLookup: PinCodeLookup = lookupPinCode,
+  /** Store pass settings; without them no pass is issued. */
+  passes?: PassSettings,
 ): Promise<SubmitLeadResult> {
   if (input.company?.trim() || (input.elapsedMs !== undefined && input.elapsedMs < MINIMUM_ELAPSED_MS)) {
     return { ok: false, code: "rejected", message: "We could not verify this submission." };
@@ -43,7 +48,18 @@ export async function submitLead(
   const lead = { ...input, state: await resolveState(input, pinCodeLookup) };
 
   try {
-    const accepted = await repository.acceptLead(lead, resolved.context);
+    // Every enquiry gets its own code, so a store visit traces back to its exact Reel.
+    const accepted = await repository.acceptLead(lead, resolved.context, {
+      passCode: passes ? generatePassCode(passes.codePrefix) : undefined,
+    });
+    logEvent("lead.accepted", {
+      inquiryId: accepted.inquiryId,
+      wasReplay: accepted.wasReplay,
+      passCode: accepted.passCode,
+      productId: input.productId,
+      reelId: input.reelId,
+      campaignId: input.campaignId,
+    });
     if (!accepted.wasReplay) {
       const eventBase = {
         sessionId: input.sessionId,
@@ -66,6 +82,9 @@ export async function submitLead(
           await repository.recordEvent({ eventName: "repeat_customer_detected", ...eventBase });
         }
         await repository.recordEvent({ eventName: "offer_unlocked", ...eventBase });
+        if (accepted.passCode) {
+          await repository.recordEvent({ eventName: "pass_issued", ...eventBase, metadata: { passCode: accepted.passCode } });
+        }
       } catch {
         console.error("Funnel event write failed", { inquiryId: accepted.inquiryId });
       }
@@ -75,6 +94,7 @@ export async function submitLead(
       inquiryId: accepted.inquiryId,
       customerId: accepted.customerId,
       isRepeatCustomer: accepted.isRepeatCustomer,
+      pass: passes && accepted.passCode ? issuedPass(accepted.passCode, accepted.createdAt, passes) : undefined,
     };
   } catch {
     return {

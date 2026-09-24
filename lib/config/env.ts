@@ -88,6 +88,21 @@ const rawSchema = z.object({
   GOOGLE_INSTAGRAM_FMS_SHEET: z.string().trim().default("Instagram_FMS"),
   /** Calendly bookings logged by the webhook. */
   GOOGLE_BOOKINGS_SHEET: z.string().trim().default("Bookings"),
+  /** Store pass scans and purchases, one row per staff action. */
+  GOOGLE_STORE_VISITS_SHEET: z.string().trim().default("Store_Visits"),
+  /** Store names, PINs and on/off switches for the staff screen. */
+  GOOGLE_STORES_SHEET: z.string().trim().default("Stores"),
+  /**
+   * Signs store pass QR links and staff logins. Unset in production turns the
+   * store pass off entirely (the landing page works exactly as before).
+   */
+  PASS_SECRET: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || undefined)
+    .refine((value) => value === undefined || value.length >= 32, { message: "must be at least 32 characters" }),
+  PASS_VALIDITY_DAYS: z.coerce.number().int().min(1).max(3650).default(60),
   /** Webhook subscription signing key. Unset disables the Calendly webhook (503). */
   CALENDLY_WEBHOOK_SIGNING_KEY: z.string().trim().optional().transform((value) => value || undefined),
   /** Event types that are video calls / store visits; decides each booking's `booking_type`. */
@@ -104,6 +119,9 @@ const rawSchema = z.object({
   UPSTASH_REDIS_REST_URL: optionalHttpsUrl,
   UPSTASH_REDIS_REST_TOKEN: z.string().trim().optional(),
 });
+
+/** Development and test only; never used when NODE_ENV is production. */
+const DEVELOPMENT_PASS_SECRET = "development-only-pass-secret-not-for-production";
 
 export type ServerEnv = ReturnType<typeof parseServerEnv>;
 
@@ -146,6 +164,8 @@ export function parseServerEnv(input: Record<string, string | undefined>) {
         events: raw.GOOGLE_EVENT_SHEET,
         instagramFms: raw.GOOGLE_INSTAGRAM_FMS_SHEET || undefined,
         bookings: raw.GOOGLE_BOOKINGS_SHEET,
+        storeVisits: raw.GOOGLE_STORE_VISITS_SHEET,
+        stores: raw.GOOGLE_STORES_SHEET,
       },
     },
     assistedSupportUrl: raw.ASSISTED_SUPPORT_URL,
@@ -160,6 +180,12 @@ export function parseServerEnv(input: Record<string, string | undefined>) {
         videoUrl: raw.CALENDLY_VIDEO_URL,
         storeUrl: raw.CALENDLY_STORE_URL ?? raw.CALENDLY_STORE_VISIT_URL,
       },
+    },
+    passes: {
+      // Outside production a fixed development secret keeps `next dev` working;
+      // production issues no passes until PASS_SECRET is set.
+      secret: raw.PASS_SECRET ?? (raw.NODE_ENV === "production" ? undefined : DEVELOPMENT_PASS_SECRET),
+      validityDays: raw.PASS_VALIDITY_DAYS,
     },
     inquiryCount: {
       enabled: raw.SHOW_INQUIRY_COUNT === "true",

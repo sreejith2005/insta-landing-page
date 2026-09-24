@@ -4,11 +4,15 @@ import { google, type sheets_v4 } from "googleapis";
 
 import type { ServerEnv } from "@/lib/config/env";
 import type {
+  AcceptLeadOptions,
   BookingRecord,
   FunnelRepository,
   InquiryContact,
   InquiryCountFilter,
   InquiryMatch,
+  PassRecord,
+  StoreRecord,
+  StoreVisitRecord,
 } from "@/lib/leads/contracts";
 import { createReferenceNumberSource, type ReferenceNumberSource } from "@/lib/leads/reference-number";
 import type { ProductRecord } from "@/lib/products/contracts";
@@ -63,6 +67,8 @@ export const defaultHeaders = {
     "idempotency_key",
     /** Same value as the FMS tab's REFERENCE NUMBER; lets a booking find it from the inquiry ID. */
     "reference_number",
+    /** The enquiry's store pass code, e.g. "MK30-7KQ4-X9MP". */
+    "pass_code",
   ],
   events: [
     "created_at",
@@ -112,8 +118,50 @@ export const defaultHeaders = {
     "PRODUCT NUMBER",
     "PRICING",
     "IMAGE",
+    "BENEFIT CODE",
   ],
+  /**
+   * One row per staff action on a store pass. The enquiry's attribution is
+   * copied onto every row so the tab can be filtered by Reel or campaign alone.
+   */
+  storeVisits: [
+    "created_at",
+    "action",
+    "store",
+    "staff_name",
+    "pass_code",
+    "customer_name",
+    "phone",
+    "inquiry_id",
+    "customer_id",
+    "product_id",
+    "reel_id",
+    "campaign_id",
+    "invoice_number",
+    "bill_amount",
+  ],
+  stores: ["store", "pin", "active"],
 } as const;
+
+/**
+ * Columns added after the tabs were first set up. If one is missing from the
+ * live sheet it is added to the header row before writing, rather than its
+ * value being silently dropped.
+ */
+const addedColumns = {
+  inquiries: ["pass_code"],
+  instagramFms: ["BENEFIT CODE"],
+  storeVisits: defaultHeaders.storeVisits,
+} as const;
+
+/** Spreadsheet column letters for a zero-based index: 0 → A, 26 → AA. */
+export function columnLetter(index: number) {
+  let letters = "";
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
+    letters = String.fromCharCode(65 + ((n - 1) % 26)) + letters;
+  }
+  return letters;
+}
 
 export function headerRecord(headers: string[], values: string[]): Row {
   return Object.fromEntries(
@@ -319,6 +367,50 @@ export function latestInquiryForContact(rows: Row[], contact: InquiryContact): I
   return latest ? inquiryMatch(latest.row) : null;
 }
 
+export function passFromRow(row: Row): PassRecord | null {
+  const passCode = trimmed(row.pass_code);
+  if (!passCode) return null;
+  return {
+    passCode,
+    inquiryId: trimmed(row.inquiry_id),
+    customerId: trimmed(row.customer_id),
+    issuedAt: trimmed(row.created_at),
+    customerName: trimmed(row.name),
+    phone: trimmed(row.phone_normalized),
+    city: trimmed(row.city),
+    productId: trimmed(row.product_id),
+    productName: trimmed(row.product_name),
+    reelId: trimmed(row.reel_id),
+    campaignId: trimmed(row.campaign_id),
+  };
+}
+
+/** Stores tab rows. The name is the ID, so rows without one are skipped. */
+export function storesFromRows(rows: Row[]): StoreRecord[] {
+  return rows
+    .map((row) => ({ name: trimmed(row.store), pin: trimmed(row.pin), active: boolean(row.active) }))
+    .filter((store) => store.name);
+}
+
+export function storeVisitFromRow(row: Row): StoreVisitRecord {
+  return {
+    createdAt: trimmed(row.created_at),
+    action: trimmed(row.action) === "purchased" ? "purchased" : "visited",
+    store: trimmed(row.store),
+    staffName: trimmed(row.staff_name),
+    passCode: trimmed(row.pass_code),
+    customerName: trimmed(row.customer_name),
+    phone: trimmed(row.phone),
+    inquiryId: trimmed(row.inquiry_id),
+    customerId: trimmed(row.customer_id),
+    productId: trimmed(row.product_id),
+    reelId: trimmed(row.reel_id),
+    campaignId: trimmed(row.campaign_id),
+    invoiceNumber: trimmed(row.invoice_number),
+    billAmount: trimmed(row.bill_amount),
+  };
+}
+
 export class GoogleSheetsRepository implements FunnelRepository {
   private readonly client: sheets_v4.Sheets;
   private readonly spreadsheetId: string;
@@ -327,6 +419,10 @@ export class GoogleSheetsRepository implements FunnelRepository {
   private readonly productCacheTtlMs = 90_000;
   private productCache?: { rows: Row[]; mapRows: Row[] | null; expiresAt: number };
   private mapTabUnavailable = false;
+  /** Tabs whose header row has been checked for `addedColumns` in this process. */
+  private readonly checkedColumns = new Set<string>();
+  private readonly storeCacheTtlMs = 60_000;
+  private storeCache?: { stores: StoreRecord[]; expiresAt: number };
   private readonly referenceNumber: ReferenceNumberSource;
 
   constructor(
@@ -399,8 +495,36 @@ export class GoogleSheetsRepository implements FunnelRepository {
     return resolved;
   }
 
-  private async appendRecord(tab: string, fallback: readonly string[], record: Row) {
-    const headers = await this.headersFor(tab, fallback);
+  /**
+   * Adds any of `required` missing from the tab's live header row (an empty tab
+   * gets the whole `fallback` row). Checked once per tab per process.
+   */
+  private async ensureColumns(tab: string, fallback: readonly string[], required: readonly string[]) {
+    if (this.checkedColumns.has(tab)) return this.headersFor(tab, fallback);
+    const response = await this.client.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: `'${tab.replace(/'/g, "''")}'!1:1`,
+    });
+    const [sheetHeaders = []] = (response.data.values ?? []) as string[][];
+    const current = sheetHeaders.map((header) => header.trim());
+    const missing = current.length ? required.filter((header) => !current.includes(header)) : [...fallback];
+    if (missing.length) {
+      await this.client.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `'${tab.replace(/'/g, "''")}'!${columnLetter(current.length)}1`,
+        valueInputOption: "RAW",
+        requestBody: { values: [missing] },
+      });
+      console.warn(JSON.stringify({ event: "sheet.columns_added", tab, columns: missing }));
+    }
+    const headers = [...current, ...missing];
+    this.headerCache.set(tab, headers);
+    this.checkedColumns.add(tab);
+    return headers;
+  }
+
+  private async appendRecord(tab: string, fallback: readonly string[], record: Row, required?: readonly string[]) {
+    const headers = required ? await this.ensureColumns(tab, fallback, required) : await this.headersFor(tab, fallback);
     await this.client.spreadsheets.values.append({
       spreadsheetId: this.spreadsheetId,
       range: this.range(tab),
@@ -437,7 +561,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
     );
   }
 
-  async acceptLead(input: LeadSubmissionInput, product: ResolvedAttributionContext) {
+  async acceptLead(input: LeadSubmissionInput, product: ResolvedAttributionContext, options: AcceptLeadOptions = {}) {
     const inquiries = await this.rows(this.tabs.inquiries);
     const replay = inquiries.find((row) => row.idempotency_key === input.idempotencyKey);
     if (replay) {
@@ -446,6 +570,8 @@ export class GoogleSheetsRepository implements FunnelRepository {
         customerId: replay.customer_id,
         isRepeatCustomer: boolean(replay.is_repeat_customer),
         wasReplay: true,
+        passCode: trimmed(replay.pass_code) || undefined,
+        createdAt: trimmed(replay.created_at),
       };
     }
 
@@ -493,11 +619,20 @@ export class GoogleSheetsRepository implements FunnelRepository {
       landing_page_version: input.landingPageVersion,
       idempotency_key: input.idempotencyKey,
       reference_number: referenceNumber,
-    });
+      // In the same row as the lead, so a lead is never saved without its pass.
+      pass_code: options.passCode ?? "",
+    }, options.passCode ? addedColumns.inquiries : undefined);
 
-    await this.appendInstagramFms(input, product, inquiryId, referenceNumber, now);
+    await this.appendInstagramFms(input, product, inquiryId, referenceNumber, now, options.passCode);
 
-    return { inquiryId, customerId, isRepeatCustomer: Boolean(existing), wasReplay: false };
+    return {
+      inquiryId,
+      customerId,
+      isRepeatCustomer: Boolean(existing),
+      wasReplay: false,
+      passCode: options.passCode,
+      createdAt,
+    };
   }
 
   /**
@@ -512,6 +647,7 @@ export class GoogleSheetsRepository implements FunnelRepository {
     inquiryId: string,
     referenceNumber: string,
     createdAt: Date,
+    passCode?: string,
   ) {
     const tab = this.tabs.instagramFms;
     if (!tab) return;
@@ -535,7 +671,8 @@ export class GoogleSheetsRepository implements FunnelRepository {
         "PRODUCT NUMBER": input.productId,
         PRICING: "",
         IMAGE: product.imageUrl ?? "",
-      });
+        "BENEFIT CODE": passCode ?? "",
+      }, passCode ? addedColumns.instagramFms : undefined);
     } catch (error) {
       // Message only: a Sheets error can echo the request body, which is PII.
       console.error("Instagram FMS write failed", { inquiryId, error: (error as Error).message });
@@ -591,5 +728,51 @@ export class GoogleSheetsRepository implements FunnelRepository {
       reference_number: booking.attribution?.referenceNumber ?? "",
     });
     return { wasReplay: false };
+  }
+
+  async findPassByCode(passCode: string) {
+    const row = (await this.rows(this.tabs.inquiries)).find((candidate) => trimmed(candidate.pass_code) === passCode);
+    return row ? passFromRow(row) : null;
+  }
+
+  /** Cached briefly: every staff page checks its login against this tab. */
+  async listStores() {
+    const now = Date.now();
+    if (this.storeCache && this.storeCache.expiresAt > now) return this.storeCache.stores;
+    const stores = storesFromRows(await this.rows(this.tabs.stores));
+    this.storeCache = { stores, expiresAt: now + this.storeCacheTtlMs };
+    return stores;
+  }
+
+  async listStoreVisits(customerId: string) {
+    return (await this.rows(this.tabs.storeVisits))
+      .filter((row) => trimmed(row.customer_id) === customerId)
+      .map(storeVisitFromRow);
+  }
+
+  async recordStoreVisit(visit: Omit<StoreVisitRecord, "createdAt">) {
+    const record: StoreVisitRecord = { ...visit, createdAt: sheetTimestamp() };
+    await this.appendRecord(
+      this.tabs.storeVisits,
+      defaultHeaders.storeVisits,
+      {
+        created_at: record.createdAt,
+        action: record.action,
+        store: record.store,
+        staff_name: record.staffName,
+        pass_code: record.passCode,
+        customer_name: record.customerName,
+        phone: record.phone,
+        inquiry_id: record.inquiryId,
+        customer_id: record.customerId,
+        product_id: record.productId,
+        reel_id: record.reelId,
+        campaign_id: record.campaignId,
+        invoice_number: record.invoiceNumber,
+        bill_amount: record.billAmount,
+      },
+      addedColumns.storeVisits,
+    );
+    return record;
   }
 }

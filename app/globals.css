@@ -1164,3 +1164,103 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; 
   .reveal[data-reveal] { opacity: 1; transform: none; }
   .success-ring, .success-check { stroke-dashoffset: 0; }
 }
+
+/* ------------------------------------------------------------ store pass */
+/* The "Planning to visit our store?" choice sits right under WhatsApp. */
+.success-pass { margin: 12px 0 0; }
+.success-pass-card { margin: 14px 0 0; scroll-margin-top: 12px; animation: panel-in .45s var(--ease); }
+.success-pass-link { display: inline-block; margin: 12px 0 0; color: var(--gold-light); font-size: 13px; text-underline-offset: 4px; }
+
+/* A white ticket, so the QR scans cleanly and screenshots read well. */
+.pass-card {
+  width: min(360px, 100%);
+  margin: 0 auto;
+  padding: 22px 20px 20px;
+  border: 1px solid rgba(217,183,116,.6);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  text-align: center;
+  box-shadow: 0 24px 54px rgba(0,0,0,.28);
+}
+.pass-card-head { padding-bottom: 14px; border-bottom: 1px dashed var(--line); }
+.pass-card-title { margin: 0; color: var(--gold-deep); font-size: 11px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+.pass-card-benefit { margin: 8px 0 0; font-family: var(--display); font-size: 1.6rem; line-height: 1.1; }
+.pass-card-name { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.pass-card-qr { display: block; width: 220px; max-width: 100%; height: auto; margin: 16px auto 4px; image-rendering: pixelated; }
+.pass-card-status { display: grid; gap: 6px; margin: 18px 0 6px; padding: 14px; border-radius: 8px; background: #f7efe7; color: var(--danger); font-weight: 600; }
+.pass-card-status span { color: var(--muted); font-size: 13px; font-weight: 400; }
+.pass-card-code { display: grid; gap: 4px; margin: 12px 0 0; }
+.pass-card-code-label { color: var(--muted); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.pass-card-code strong { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 1.45rem; letter-spacing: .06em; }
+.pass-card-valid { margin: 8px 0 0; color: var(--success); font-size: 13px; font-weight: 600; }
+.pass-card.is-expired .pass-card-valid,
+.pass-card.is-used .pass-card-valid { color: var(--muted); }
+.pass-card-note { margin: 12px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+
+.pass-page { display: grid; align-content: start; justify-items: center; gap: 18px; padding: 24px var(--gutter) 48px; background: var(--ivory); min-height: 100svh; }
+.pass-page .pass-card { box-shadow: 0 18px 40px rgba(26,24,20,.12); }
+.pass-page-staff { color: var(--muted); font-size: 12px; text-underline-offset: 4px; }
+
+/* ----------------------------------------------------------- staff screen */
+.staff-shell { background: var(--ivory); }
+.staff-main { display: grid; gap: 14px; width: min(560px, 100%); margin: 0 auto; padding: 16px var(--gutter) 48px; }
+.staff-card { margin: 0; padding: 18px 16px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.staff-card h1 { margin: 0; font-size: 1.8rem; }
+.staff-muted { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.staff-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+.staff-form { display: grid; gap: 12px; }
+.staff-form label, .staff-search label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.staff-form input, .staff-form select, .staff-search input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+.staff-search-row { display: flex; gap: 8px; margin-top: 8px; }
+.staff-search input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: .04em; }
+.staff-button {
+  min-height: 48px;
+  padding: 10px 18px;
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.staff-button.is-secondary { background: #fff; color: var(--ink); }
+.staff-button:disabled { opacity: .55; cursor: wait; }
+.staff-link { padding: 6px 0; border: 0; background: none; color: var(--gold-deep); font: inherit; font-size: 14px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.staff-code { margin: 0 0 12px; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 1.3rem; letter-spacing: .05em; }
+.staff-status { display: grid; gap: 4px; padding: 14px; border-radius: 8px; color: #fff; }
+.staff-status strong { font-size: 1.35rem; letter-spacing: .02em; text-transform: uppercase; }
+.staff-status span { font-size: 13.5px; line-height: 1.45; }
+.staff-status.is-valid { background: var(--success); }
+.staff-status.is-used { background: var(--danger); }
+.staff-status.is-expired { background: #8a5a14; }
+.staff-warning { margin: 12px 0 0; padding: 10px 12px; border-left: 4px solid #b7791f; background: #fdf4e3; font-size: 13.5px; line-height: 1.45; }
+.staff-details { display: grid; gap: 0; margin: 14px 0 0; }
+.staff-details div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.staff-details dt { color: var(--muted); font-size: 13px; }
+.staff-details dd { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.staff-phone { font-size: 1.3rem !important; font-weight: 700; letter-spacing: .12em; }
+.staff-actions { display: grid; gap: 12px; margin-top: 16px; }
+.staff-action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.staff-action-row .staff-button:only-child { grid-column: 1 / -1; }
+.staff-purchase { padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--ivory); }
+.staff-error { margin: 0; color: var(--danger); font-size: 14px; font-weight: 600; }
+.staff-success { margin: 0; color: var(--success); font-size: 14px; font-weight: 600; }
+.staff-history { margin-top: 18px; }
+.staff-history h2 { margin: 0 0 8px; font-size: 1.2rem; }
+.staff-history ol { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+@media (max-width: 380px) {
+  .staff-action-row { grid-template-columns: 1fr; }
+}

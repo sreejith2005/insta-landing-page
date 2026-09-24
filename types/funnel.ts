@@ -65,6 +65,13 @@ export type AcceptedInquiry = {
   inquiryId: string;
   customerId: string;
   isRepeatCustomer: boolean;
+  /** The store pass, when passes are switched on. */
+  pass?: {
+    code: string;
+    path: string;
+    qrPath: string;
+    validUntil: string;
+  };
 };
 
 export type FunnelEventName =
@@ -82,4 +89,6 @@ export type FunnelEventName =
   | "calendly_event_scheduled"
   | "whatsapp_contact_clicked"
   | "product_picker_shown"
-  | "product_picker_selected";
+  | "product_picker_selected"
+  | "pass_issued"
+  | "store_pass_opened";

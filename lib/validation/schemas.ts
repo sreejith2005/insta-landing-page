@@ -139,6 +139,9 @@ export const eventNames = [
   // Reel-level links whose Reel maps to several active products.
   "product_picker_shown",
   "product_picker_selected",
+  // Store pass: issued with the lead (server), opened on the thank-you screen.
+  "pass_issued",
+  "store_pass_opened",
 ] as const;
 
 /** Fired before any product is chosen, so the only event allowed to omit `productId`. */

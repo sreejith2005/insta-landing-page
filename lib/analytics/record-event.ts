@@ -10,6 +10,8 @@ const allowedMetadata = new Set([
   "productPosition",
   /** "video_call" | "store_visit", on Calendly events. */
   "bookingType",
+  /** Store pass code. Not PII: it identifies the enquiry, like the inquiry ID. */
+  "passCode",
 ]);
 
 export async function recordEvent(input: EventInput, repository: FunnelRepository) {

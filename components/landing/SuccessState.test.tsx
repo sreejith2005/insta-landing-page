@@ -156,4 +156,31 @@ describe("SuccessState", () => {
     render(<SuccessState isRepeatCustomer firstName="Ananya" />);
     expect(screen.getByText("Welcome back.")).toBeVisible();
   });
+
+  it("shows the store pass only when the customer says they plan to visit", () => {
+    const track = vi.fn();
+    render(
+      <SuccessState
+        isRepeatCustomer={false}
+        firstName="Ananya Shah"
+        whatsappUrl="https://wa.me/919876543210?text=Hi"
+        pass={{
+          code: "MK30-7KQ4-X9MP",
+          path: "/p/MK30-7KQ4-X9MP.sig",
+          qrPath: "/p/MK30-7KQ4-X9MP.sig/qr",
+          validUntil: "2026-11-23T04:30:00.000Z",
+        }}
+        track={track}
+      />,
+    );
+    expect(screen.queryByText("MK30-7KQ4-X9MP")).not.toBeInTheDocument();
+    const button = screen.getByRole("button", { name: /planning to visit our store/i });
+    fireEvent.click(button);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(track).toHaveBeenCalledWith("store_pass_opened");
+    expect(screen.getByText("MK30-7KQ4-X9MP")).toBeVisible();
+    expect(screen.getByRole("img", { name: /QR code for store pass MK30-7KQ4-X9MP/ })).toHaveAttribute("src", "/p/MK30-7KQ4-X9MP.sig/qr");
+    expect(screen.getByText(/Valid till 23 Nov 2026/)).toBeVisible();
+    expect(screen.getByText("For Ananya")).toBeVisible();
+  });
 });
