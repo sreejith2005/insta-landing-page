@@ -30,7 +30,7 @@ test("pass: enquiry → store pass → staff scan → visit → purchase → alr
   const qrPath = (await qr.getAttribute("src"))!;
   const passPath = qrPath.replace(/\/qr$/, "");
 
-  // The QR is a real SVG that encodes the pass link.
+  // The QR is a real SVG that encodes the staff check link.
   const svg = await request.get(qrPath);
   expect(svg.status()).toBe(200);
   expect(svg.headers()["content-type"]).toContain("image/svg+xml");
@@ -49,8 +49,11 @@ test("pass: enquiry → store pass → staff scan → visit → purchase → alr
   await expect(page.getByText("For Ananya")).toBeVisible();
   await expect(page.getByText("3210")).toHaveCount(0);
 
-  // Staff: the first scan asks for the store login, then shows the pass.
-  await page.getByRole("link", { name: "MK Jewels staff login" }).click();
+  await expect(page.getByText("MK Jewels staff login")).toHaveCount(0);
+
+  // Staff: the QR opens the staff screen; the first scan asks for the store login, then shows the pass.
+  await page.goto(`/staff?code=${code}`);
+  await expect(page.getByText("This QR is for MK Jewels store staff.")).toBeVisible();
   await page.getByRole("combobox", { name: "Store" }).selectOption("Bandra");
   await page.getByLabel("Store PIN").fill("000000");
   await page.getByLabel("Your name").fill("Priya");
@@ -63,21 +66,21 @@ test("pass: enquiry → store pass → staff scan → visit → purchase → alr
   await expect(page.locator(".staff-phone")).toHaveText("3210");
   await expect(page.getByText("Instagram reel R123 · RAKHI26")).toBeVisible();
 
-  // Scanning again while logged in goes straight to the staff screen.
+  // The customer's pass link, opened on a logged-in phone, goes to the staff screen too.
   await page.goto(passPath);
   await expect(page).toHaveURL(new RegExp(`/staff\\?code=${code}`));
 
-  await page.getByRole("button", { name: "Customer visited" }).click();
+  await page.getByRole("button", { name: "Visited, no purchase" }).click();
   await expect(page.getByText("Visit saved.")).toBeVisible();
   await expect(page.locator(".staff-history li")).toHaveCount(1);
 
-  await page.getByRole("button", { name: "Purchased with discount" }).click();
+  await page.getByRole("button", { name: "Give discount" }).click();
   await page.getByLabel("Invoice number").fill("INV-1001");
   await page.getByLabel("Bill amount (₹)").fill("72,000");
-  await page.getByRole("button", { name: "Confirm purchase" }).click();
+  await page.getByRole("button", { name: "Confirm and use pass" }).click();
   await expect(page.getByText("Already used")).toBeVisible();
   await expect(page.getByText(/Invoice INV-1001 · ₹72,000/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Purchased with discount" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Give discount" })).toHaveCount(0);
 
   // Typing the code by hand finds the same pass.
   await page.getByLabel(/type their code/).fill(code.toLowerCase().replaceAll("-", " "));

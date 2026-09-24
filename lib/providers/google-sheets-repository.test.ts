@@ -736,9 +736,9 @@ describe("GoogleSheetsRepository store passes", () => {
     expect(await repository.listStoreVisits("cus_2")).toHaveLength(0);
   });
 
-  it("reads stores by name, PIN and on/off switch", async () => {
+  it("reads stores by name, PIN and on/off switch, whatever the header case", async () => {
     const { repository } = fakeSheet({
-      Stores: [["store", "pin", "active"], ["Bandra", "482913", "TRUE"], ["Ulhasnagar", "318842", "FALSE"], ["", "1", "TRUE"]],
+      Stores: [["Store", "PIN", "Active"], ["Bandra", "482913", "TRUE"], ["Ulhasnagar", "318842", "FALSE"], ["", "1", "TRUE"]],
     });
     expect(await repository.listStores()).toEqual([
       { name: "Bandra", pin: "482913", active: true },

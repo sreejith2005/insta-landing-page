@@ -385,9 +385,13 @@ export function passFromRow(row: Row): PassRecord | null {
   };
 }
 
-/** Stores tab rows. The name is the ID, so rows without one are skipped. */
+/**
+ * Stores tab rows. The name is the ID, so rows without one are skipped. The tab
+ * is typed by hand, so headers match whatever their case ("Store", "PIN").
+ */
 export function storesFromRows(rows: Row[]): StoreRecord[] {
   return rows
+    .map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toLowerCase(), value])))
     .map((row) => ({ name: trimmed(row.store), pin: trimmed(row.pin), active: boolean(row.active) }))
     .filter((store) => store.name);
 }

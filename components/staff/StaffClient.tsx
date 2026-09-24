@@ -43,7 +43,7 @@ export function StaffLogin({ stores }: { stores: string[] }) {
   return (
     <form className="staff-card staff-form" onSubmit={submit}>
       <h1>Staff login</h1>
-      <p className="staff-muted">Log in once on this phone to check customer store passes.</p>
+      <p className="staff-muted">Log in once on this phone. After that, scanning a customer&apos;s pass opens it straight away.</p>
       <label>
         Store
         <select name="store" required defaultValue="">
@@ -84,8 +84,8 @@ export function LogoutButton() {
 }
 
 /**
- * "Customer visited" logs a walk-in and leaves the pass usable; "Purchased"
- * asks for the invoice and uses the pass up. Both refresh the screen from the
+ * "Visited, no purchase" logs a walk-in and leaves the pass usable; "Give
+ * discount" asks for the invoice and uses the pass up. Both refresh the screen from the
  * sheet afterwards, so what staff see is always what was saved.
  */
 export function VisitActions({ code, canPurchase }: { code: string; canPurchase: boolean }) {
@@ -116,7 +116,7 @@ export function VisitActions({ code, canPurchase }: { code: string; canPurchase:
     }
     await send(
       { action: "purchased", invoiceNumber: String(form.get("invoiceNumber") ?? ""), billAmount },
-      "Purchase saved. The pass is now used.",
+      "Discount recorded. This pass is now used.",
     );
   }
 
@@ -124,7 +124,7 @@ export function VisitActions({ code, canPurchase }: { code: string; canPurchase:
     <div className="staff-actions">
       <div className="staff-action-row">
         <button className="staff-button is-secondary" type="button" disabled={busy} onClick={() => send({ action: "visited" }, "Visit saved.")}>
-          Customer visited
+          Visited, no purchase
         </button>
         {canPurchase ? (
           <button
@@ -134,7 +134,7 @@ export function VisitActions({ code, canPurchase }: { code: string; canPurchase:
             aria-expanded={purchasing}
             onClick={() => setPurchasing((open) => !open)}
           >
-            Purchased with discount
+            Give discount
           </button>
         ) : null}
       </div>
@@ -148,7 +148,7 @@ export function VisitActions({ code, canPurchase }: { code: string; canPurchase:
             Bill amount (₹)
             <input name="billAmount" type="text" inputMode="decimal" required autoComplete="off" />
           </label>
-          <button className="staff-button" type="submit" disabled={busy}>{busy ? "Saving…" : "Confirm purchase"}</button>
+          <button className="staff-button" type="submit" disabled={busy}>{busy ? "Saving…" : "Confirm and use pass"}</button>
         </form>
       ) : null}
       {message ? (

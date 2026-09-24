@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { BrandHeader } from "@/components/brand/BrandHeader";
 import { LogoutButton, StaffLogin, VisitActions } from "@/components/staff/StaffClient";
+import { passConfig } from "@/config/pass";
 import { serverEnv } from "@/lib/config/env";
 import type { PassRecord } from "@/lib/leads/contracts";
 import { normalizePassCode } from "@/lib/passes/code";
@@ -48,7 +49,7 @@ function StatusBanner({ status }: { status: PassStatus }) {
   return (
     <div className="staff-status is-valid" role="status">
       <strong>Valid pass</strong>
-      <span>30% off making charges · valid till {formatPassDate(status.validUntil)}</span>
+      <span>{passConfig.benefit} · valid till {formatPassDate(status.validUntil)}</span>
     </div>
   );
 }
@@ -72,7 +73,13 @@ function PassDetails({ pass, status }: { pass: PassRecord; status: PassStatus })
         <div><dt>From</dt><dd>Instagram reel {pass.reelId} · {pass.campaignId}</dd></div>
         <div><dt>Issued</dt><dd>{formatPassDate(pass.issuedAt)}</dd></div>
       </dl>
-      <p className="staff-muted">Ask the customer for the last 4 digits of their mobile number and match them above.</p>
+      {status.state === "valid" ? (
+        <ol className="staff-steps">
+          <li>Ask the customer for the last 4 digits of their mobile number and match them above.</li>
+          <li>Apply {passConfig.benefit} on the bill.</li>
+          <li>Tap <strong>Give discount</strong> and enter the invoice number and bill amount. The pass can then not be used again.</li>
+        </ol>
+      ) : null}
       <VisitActions code={pass.passCode} canPurchase={status.state === "valid"} />
       {status.history.length ? (
         <div className="staff-history">
@@ -119,7 +126,16 @@ export default async function StaffPage({ searchParams }: { searchParams: Promis
   }
 
   if (!staff) {
-    return <Shell><StaffLogin stores={stores.filter((store) => store.active).map((store) => store.name)} /></Shell>;
+    return (
+      <Shell>
+        {rawCode ? (
+          <p className="staff-card staff-scan-note">
+            This QR is for MK Jewels store staff. <strong>Customer?</strong> Show it at the store counter to claim your benefit.
+          </p>
+        ) : null}
+        <StaffLogin stores={stores.filter((store) => store.active).map((store) => store.name)} />
+      </Shell>
+    );
   }
 
   const code = rawCode ? normalizePassCode(rawCode) : null;

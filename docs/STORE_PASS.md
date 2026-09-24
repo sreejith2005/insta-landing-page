@@ -18,17 +18,22 @@ Instagram Reel, campaign and product that brought the customer in.
 
 ## Store staff
 
-1. Scan the customer's QR with the phone's normal camera (no app needed), or
-   open `/staff` and type the code.
+1. Scan the customer's QR with the phone's normal camera (no app needed). It
+   opens the staff check screen. Or open `/staff` and type the code.
 2. First time on a phone: choose the store, enter the store PIN and your name.
-   The phone stays logged in for 30 days.
-3. Ask the customer for the last 4 digits of their mobile and match them on
-   screen.
-4. Tap **Customer visited** (the pass stays usable), or **Purchased with
-   discount** and enter the invoice number and bill amount (the pass is then
-   used).
-5. A used pass shows **ALREADY USED** with when, where, who and the invoice.
+   The phone stays logged in for 30 days, in that phone's default browser.
+3. The screen shows **Valid pass**, **Already used** or **Expired**, with the
+   customer's name and the last 4 digits of their mobile. Ask the customer for
+   those 4 digits and match them.
+4. Apply the benefit on the bill, then tap **Give discount** and enter the
+   invoice number and bill amount. The pass is now used and cannot be used
+   again at any store.
+5. If the customer only looks around, tap **Visited, no purchase**. The pass
+   stays usable.
 6. The CRM team uses the same screen with the **Online / CRM** store.
+
+A customer who scans their own QR sees a note that it is for store staff.
+Their pass link (from the thank-you screen) still shows their pass.
 
 ## Sheets
 
@@ -36,7 +41,7 @@ Instagram Reel, campaign and product that brought the customer in.
   campaign and product, so filter this tab by `reel_id` or `campaign_id` to
   see which Reels brought walk-ins and sales. Do not edit rows by hand; add a
   note next to a row to correct it.
-- `Stores`: `store | pin | active`.
+- `Stores`: `Store | PIN | Active` (header case does not matter).
   - To add a store, add a row.
   - To open Ulhasnagar, set `active` to TRUE.
   - To lock a store's phones out, change its PIN.

@@ -27,8 +27,8 @@ function Message({ title, text }: { title: string; text: string }) {
 }
 
 /**
- * What the QR opens. Customers see their pass; logged-in staff are sent
- * straight to the verification screen for this code.
+ * The customer's pass link. Logged-in staff are sent to the verification
+ * screen (QRs issued before the QR pointed at /staff still open this page).
  */
 export default async function PassPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -68,9 +68,6 @@ export default async function PassPage({ params }: { params: Promise<{ token: st
           state={status.state}
           note={status.usedBy ? `${formatPassDateTime(status.usedBy.createdAt)} at ${status.usedBy.store}` : undefined}
         />
-        <a className="pass-page-staff" href={`/staff?code=${encodeURIComponent(pass.passCode)}`}>
-          MK Jewels staff login
-        </a>
       </main>
     </div>
   );

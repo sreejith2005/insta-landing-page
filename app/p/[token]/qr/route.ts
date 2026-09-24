@@ -6,16 +6,15 @@ import { publicOrigin } from "@/lib/passes/origin";
 
 /**
  * The pass QR as an SVG, drawn on the server so the customer's page ships no
- * QR code library. It encodes the pass page's full address, so any phone
- * camera opens it; staff who are logged in land on the verification screen.
+ * QR code library. Only store staff scan it, so it opens the staff check
+ * screen for this code (login first, if the phone is not logged in yet).
  */
 export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const env = serverEnv();
-  if (!env.passes.secret || !verifyPassToken(token, env.passes.secret)) {
-    return new Response("Not found", { status: 404 });
-  }
-  const url = `${publicOrigin(request.headers, env.appUrl)}/p/${token}`;
+  const code = env.passes.secret ? verifyPassToken(token, env.passes.secret) : null;
+  if (!code) return new Response("Not found", { status: 404 });
+  const url = `${publicOrigin(request.headers, env.appUrl)}/staff?code=${code}`;
   const svg = await QRCode.toString(url, {
     type: "svg",
     errorCorrectionLevel: "M",
